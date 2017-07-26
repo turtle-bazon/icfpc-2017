@@ -1,0 +1,6 @@
+[package]
+name = "sokoban"
+version = "0.1.0"
+authors = ["Azamat S. Kalimoulline <turtle@bazon.ru>"]
+
+[dependencies]
