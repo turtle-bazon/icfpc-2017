@@ -4,5 +4,7 @@ enum Map {
 }
 
 struct Room {
-    entry: Vec<Vec<Map> >,
+    width: usize,
+    height: usize,
+    entry: Vec<Map>,
 }
