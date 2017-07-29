@@ -1,10 +1,12 @@
-enum Map {
+#[derive (Debug)]
+pub enum Map {
     Wall,
-    Floor
+    Floor,
 }
 
-struct Room {
-    width: usize,
-    height: usize,
-    entry: Vec<Map>,
+#[derive (Debug)]
+pub struct Room {
+    pub width: usize,
+    pub height: usize,
+    pub content: Vec<Map>,
 }
