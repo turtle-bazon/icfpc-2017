@@ -1,5 +1,5 @@
 #[derive (Debug)]
-pub enum Map {
+pub enum Tile {
     Wall,
     Floor,
 }
@@ -8,5 +8,5 @@ pub enum Map {
 pub struct Room {
     pub width: usize,
     pub height: usize,
-    pub content: Vec<Map>,
+    pub content: Vec<Tile>,
 }

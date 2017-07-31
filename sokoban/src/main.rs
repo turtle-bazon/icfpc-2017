@@ -10,9 +10,9 @@ use std::io::prelude::*;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if (2 == args.len()) {
+    if args.len() == 2 {
         let map_file = &args[1];
-        
+
         let mut file = File::open (map_file).expect("File not found");
         let mut contents = String::new();
         file.read_to_string(&mut contents).expect("something went wrong reading the file");
