@@ -9,6 +9,7 @@ pub enum DataElement {
     Player,
     Crate,
     CrateDst,
+    CrateOnDst,
 }
 
 named!(wall<&[u8], DataElement>, map!(char!('#'), |_| DataElement::Wall));
@@ -16,7 +17,8 @@ named!(floor<&[u8], DataElement>, map!(char!(' '), |_| DataElement::Floor));
 named!(player<&[u8], DataElement>, map!(char!('I'), |_| DataElement::Player));
 named!(crate_<&[u8], DataElement>, map!(char!('+'), |_| DataElement::Crate));
 named!(crate_dst<&[u8], DataElement>, map!(char!('@'), |_| DataElement::CrateDst));
-named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | crate_ | crate_dst)));
+named!(crate_on_dst<&[u8], DataElement>, map!(char!('*'), |_| DataElement::CrateOnDst));
+named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | crate_ | crate_dst | crate_on_dst)));
 named!(roomdef<Vec<Vec<DataElement>>>, separated_list_complete!(alt!(char!('\r') | char!('\n')), dataline));
 
 #[derive(Debug)]
@@ -50,8 +52,8 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
         .iter()
         .flat_map(|l| l.iter().filter(|e| e == &&el))
         .count();
-    let crates_count = el_count(DataElement::Crate);
-    let crates_dst_count = el_count(DataElement::CrateDst);
+    let crates_count = el_count(DataElement::Crate) + el_count(DataElement::CrateOnDst);
+    let crates_dst_count = el_count(DataElement::CrateDst) + el_count(DataElement::CrateOnDst);
     let start_pos_count = el_count(DataElement::Player);
     if crates_count == 0 {
         Err(Error::NoCratesInRoom)
@@ -73,6 +75,7 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
                     &DataElement::Wall => Tile::Wall,
                     &DataElement::Floor => Tile::Floor,
                     &DataElement::CrateDst => Tile::CrateDst,
+                    &DataElement::CrateOnDst => Tile::CrateDst,
                     _ => Tile::Floor,
                 }))
                 .collect(),
@@ -81,16 +84,16 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
 }
 
 fn make_init_state(game: &mut Game, width: usize, rd: &Vec<Vec<DataElement>>) -> Result<GameStateId, Error> {
-    let coords_of = |el| rd
+    let coords_of = |el1, el2| rd
         .iter()
         .flat_map(|l| l.iter())
         .enumerate()
-        .filter(move |&(_, ref e)| e == &&el)
+        .filter(move |&(_, ref e)| e == &&el1 || e == &&el2)
         .map(|(coord, _)| ((coord / width) as isize, (coord % width) as isize));
-    let player = coords_of(DataElement::Player)
+    let player = coords_of(DataElement::Player, DataElement::Player)
         .next()
         .ok_or(Error::InvalidPlayerStartPositionsCount(0))?;
-    Ok(game.add_state(player, coords_of(DataElement::Crate)))
+    Ok(game.add_state(player, coords_of(DataElement::Crate, DataElement::CrateOnDst)))
 }
 
 pub fn parse(input: &[u8]) -> Result<(Game, GameStateId), Error> {
