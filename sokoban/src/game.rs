@@ -68,6 +68,7 @@ impl Game {
 
     pub fn get_state<'a>(&'a self, state_id: GameStateId) -> Result<GameState<'a>, Error> {
         let state_len = 1 + self.room.crates_count;
+        println!("{}", self.coords_buf.len());
         if state_id + state_len > self.coords_buf.len() {
             Err(Error::InvalidGameStateId(state_id))
         } else {
