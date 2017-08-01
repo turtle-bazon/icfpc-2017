@@ -1,4 +1,4 @@
-use nom::IResult;
+use nom::{self, IResult};
 use super::map::{Tile, Room};
 
 #[derive (Debug)]
@@ -18,52 +18,55 @@ named!(destination<&[u8], DataElement>, map!(char!('@'), |_| DataElement::Destin
 named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | cube | destination)));
 named!(roomdef<Vec<Vec<DataElement>>>, separated_list_complete!(alt!(char!('\r') | char!('\n')), dataline));
 
-fn width_from(rd: &Vec<Vec<DataElement>>) -> usize {
-    let mut max_width: usize = 0;
-    let mut min_width: usize = 65535;
-
-    for data_line in rd.iter() {
-        let current_width = data_line.len();
-
-        if current_width > max_width {
-            max_width = current_width;
-        }
-
-        if current_width < min_width {
-            min_width = current_width;
-        }
-    }
-
-    if max_width != min_width {
-        panic!("Error");
-    }
-
-    max_width
+#[derive(Debug)]
+pub enum Error {
+    RoomIsEmpty,
+    WidthMismatch { min: usize, max: usize, },
+    ParseNom(nom::ErrorKind),
+    ParseIncomplete,
 }
 
-fn content_from(width: usize, height: usize, rd: Vec<Vec<DataElement>>) -> Room {
+fn width_from(rd: &Vec<Vec<DataElement>>) -> Result<usize, Error> {
+    let min_width = rd.iter().map(|l| l.len()).min();
+    let max_width = rd.iter().map(|l| l.len()).max();
+
+    debug!("width_from: min_width = {:?}, max_width = {:?}", min_width, max_width);
+    match (min_width, max_width) {
+        (Some(min), Some(max)) if min == max =>
+            Ok(min),
+        (Some(min), Some(max)) =>
+            Err(Error::WidthMismatch { min: min, max: max, }),
+        (None, _) | (_, None) =>
+            Err(Error::RoomIsEmpty),
+    }
+}
+
+fn room_from(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Room {
     Room {
         width: width,
         height: height,
         content: rd
-            .into_iter()
-            .flat_map(|data_line| data_line.into_iter().map(|e| match e {
-                DataElement::Wall => Tile::Wall,
-                DataElement::Floor => Tile::Floor,
+            .iter()
+            .flat_map(|data_line| data_line.iter().map(|e| match e {
+                &DataElement::Wall => Tile::Wall,
+                &DataElement::Floor => Tile::Floor,
                 _ => Tile::Floor,
             }))
             .collect(),
     }
 }
 
-pub fn parse_map(input: &[u8]) -> Room {
+pub fn parse_map(input: &[u8]) -> Result<Room, Error> {
     let rd: Vec<Vec<DataElement> >  = match roomdef(input) {
-        IResult::Done(_, rdb) => rdb,
-        IResult::Error(_) => panic!("error"),
-        IResult::Incomplete(_) => panic!("incomplete"),
+        IResult::Done(_, rdb) =>
+            rdb,
+        IResult::Error(e) =>
+            return Err(Error::ParseNom(e)),
+        IResult::Incomplete(_) =>
+            return Err(Error::ParseIncomplete),
     };
-    let width = width_from (&rd);
+    let width = width_from(&rd)?;
     let height = rd.len();
 
-    content_from(width, height, rd)
+    Ok(room_from(width, height, &rd))
 }

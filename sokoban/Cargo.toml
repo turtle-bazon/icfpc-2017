@@ -1,7 +1,11 @@
 [package]
 name = "sokoban"
-version = "0.1.0"
-authors = ["Azamat S. Kalimoulline <turtle@bazon.ru>"]
+version = "0.2.0"
+authors = ["Azamat S. Kalimoulline <turtle@bazon.ru>",
+           "Alexey V. Voznyuk <me@swizard.info>"]
 
 [dependencies]
 nom = "^3.1"
+log = "0.3"
+clap = "2.24"
+env_logger = "0.4"
