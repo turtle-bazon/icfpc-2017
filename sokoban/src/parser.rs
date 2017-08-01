@@ -8,6 +8,7 @@ pub enum DataElement {
     Player,
     Cube,
     Destination,
+    CubeOnDestination,
 }
 
 named!(wall<&[u8], DataElement>, map!(char!('#'), |_| DataElement::Wall));
@@ -15,7 +16,8 @@ named!(floor<&[u8], DataElement>, map!(char!(' '), |_| DataElement::Floor));
 named!(player<&[u8], DataElement>, map!(char!('I'), |_| DataElement::Player));
 named!(cube<&[u8], DataElement>, map!(char!('+'), |_| DataElement::Cube));
 named!(destination<&[u8], DataElement>, map!(char!('@'), |_| DataElement::Destination));
-named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | cube | destination)));
+named!(cube_on_destination<&[u8], DataElement>, map!(char!('*'), |_| DataElement::CubeOnDestination));
+named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | cube | destination | cube_on_destination)));
 named!(roomdef<Vec<Vec<DataElement>>>, separated_list_complete!(alt!(char!('\r') | char!('\n')), dataline));
 
 #[derive(Debug)]
