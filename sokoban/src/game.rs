@@ -5,7 +5,7 @@ use super::map::{Tile, Room};
 
 pub type Coords = (isize, isize);
 
-#[derive(Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Placement {
     pub player: Coords,
     pub crates: Rc<Vec<Coords>>,
@@ -71,7 +71,9 @@ impl Game {
             if let Some(bc) = self.crates_pos_buf.get(crates) {
                 (bc.clone(), false)
             } else {
-                let bc = Rc::new(crates.clone());
+                let mut crates_clone = crates.clone();
+                crates_clone.sort();
+                let bc = Rc::new(crates_clone);
                 (bc, true)
             };
         if insert_p {
@@ -100,7 +102,7 @@ pub enum Move {
 }
 
 impl GameState {
-    pub fn room_at(&self, coord: Coords) -> Option<&Tile> {
+    pub fn room_at(&self, coord: &Coords) -> Option<&Tile> {
         let width = self.room.width as isize;
         let height = self.room.height as isize;
         if (coord.0 < 0) || (coord.0 >= height) || (coord.1 < 0) || (coord.1 >= width) {
@@ -111,8 +113,22 @@ impl GameState {
         }
     }
 
-    pub fn crate_at(&self, coord: Coords, crates: &[Coords]) -> Option<usize> {
-        crates.iter().position(|c| c == &coord)
+    pub fn crate_at(&self, coord: &Coords) -> Option<usize> {
+        self.placement
+            .crates
+            .iter()
+            .position(|c| c == coord)
+    }
+
+    pub fn finished(&self) -> bool {
+        self.placement
+            .crates
+            .iter()
+            .all(|c| if let Some(&Tile::CrateDst) = self.room_at(c) {
+                true
+            } else {
+                false
+            })
     }
 
     pub fn transitions<'a, 'b>(&'a self, game: &'b mut Game) -> Transitions<'a, 'b> {
@@ -152,11 +168,11 @@ impl<'a, 'b> Iterator for Transitions<'a, 'b> {
             let far_coord =
                 (player_row + rdd, player_col + cdd);
             let crates = &*self.state.placement.crates;
-            if let Some(&Tile::Floor) = self.state.room_at(near_coord) {
+            if let Some(&Tile::Floor) = self.state.room_at(&near_coord) {
                 let placement = self.game.make_placement(near_coord, crates);
                 return Some((move_, self.game.make_game_state(placement)));
-            } else if let Some(crate_index) = self.state.crate_at(near_coord, crates) {
-                if let Some(&Tile::Floor) = self.state.room_at(far_coord) {
+            } else if let Some(crate_index) = self.state.crate_at(&near_coord) {
+                if let Some(&Tile::Floor) = self.state.room_at(&far_coord) {
                     self.crates_pos.clear();
                     let coords_iter = crates
                         .iter()

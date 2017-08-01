@@ -1,8 +1,12 @@
 
 pub mod a_star {
+    use std::collections::{HashSet, BinaryHeap};
     use super::super::game::{Game, GameState, Move};
 
     pub fn solve(game: &mut Game, initial_state: GameState) -> Option<Vec<(Move, GameState)>> {
+        let mut visited = HashSet::new();
+        visited.insert(initial_state.placement.clone());
+
         unimplemented!()
 
             // for (move_, trans_state) in initial_state.transitions(&mut game) {
