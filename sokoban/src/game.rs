@@ -47,6 +47,7 @@ pub struct Game {
 #[derive(Debug)]
 pub enum Error {
     InvalidGameStateId(GameStateId),
+    InvalidCoord(Coords),
 }
 
 impl Game {
@@ -78,4 +79,18 @@ impl Game {
             })
         }
     }
+}
+
+impl<'a> GameState<'a> {
+    pub fn room_at(&self, coord: Coords) -> Result<&'a Tile, Error> {
+        let width = self.room.width as isize;
+        let height = self.room.height as isize;
+        if (coord.0 < 0) || (coord.0 >= height) || (coord.1 < 0) || (coord.1 >= width) {
+            Err(Error::InvalidCoord(coord))
+        } else {
+            let index = coord.0 * width + coord.1;
+            Ok(&self.room.content[index as usize])
+        }
+    }
+
 }
