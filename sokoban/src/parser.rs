@@ -6,16 +6,16 @@ pub enum DataElement {
     Wall,
     Floor,
     Player,
-    Cube,
-    Destination,
+    Crate,
+    CrateDst,
 }
 
 named!(wall<&[u8], DataElement>, map!(char!('#'), |_| DataElement::Wall));
 named!(floor<&[u8], DataElement>, map!(char!(' '), |_| DataElement::Floor));
 named!(player<&[u8], DataElement>, map!(char!('I'), |_| DataElement::Player));
-named!(cube<&[u8], DataElement>, map!(char!('+'), |_| DataElement::Cube));
-named!(destination<&[u8], DataElement>, map!(char!('@'), |_| DataElement::Destination));
-named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | cube | destination)));
+named!(crate_<&[u8], DataElement>, map!(char!('+'), |_| DataElement::Crate));
+named!(crate_dst<&[u8], DataElement>, map!(char!('@'), |_| DataElement::CrateDst));
+named!(dataline<&[u8], Vec<DataElement>>, many0!(alt!(wall | floor | player | crate_ | crate_dst)));
 named!(roomdef<Vec<Vec<DataElement>>>, separated_list_complete!(alt!(char!('\r') | char!('\n')), dataline));
 
 #[derive(Debug)]
@@ -41,7 +41,7 @@ fn width_from(rd: &Vec<Vec<DataElement>>) -> Result<usize, Error> {
     }
 }
 
-fn room_from(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Room {
+fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Room {
     Room {
         width: width,
         height: height,
@@ -50,6 +50,7 @@ fn room_from(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Room {
             .flat_map(|data_line| data_line.iter().map(|e| match e {
                 &DataElement::Wall => Tile::Wall,
                 &DataElement::Floor => Tile::Floor,
+                &DataElement::CrateDst => Tile::CrateDst,
                 _ => Tile::Floor,
             }))
             .collect(),
@@ -68,5 +69,5 @@ pub fn parse_map(input: &[u8]) -> Result<Room, Error> {
     let width = width_from(&rd)?;
     let height = rd.len();
 
-    Ok(room_from(width, height, &rd))
+    Ok(make_room(width, height, &rd))
 }

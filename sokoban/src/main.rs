@@ -53,6 +53,6 @@ fn run() -> Result<(), Error> {
     let parsed_room = parser::parse_map(contents.as_bytes())
         .map_err(Error::RoomParse)?;
 
-    println!("Parsed room: {:?}", parsed_room);
+    println!("{:?}", parsed_room);
     Ok(())
 }
