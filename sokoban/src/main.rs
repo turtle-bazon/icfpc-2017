@@ -52,9 +52,16 @@ fn run() -> Result<(), Error> {
     file.read_to_string(&mut contents)
         .map_err(Error::RoomFileRead)?;
 
-    let (game, initial_state) = parser::parse(contents.as_bytes())
+    let (mut game, initial_state) = parser::parse(contents.as_bytes())
         .map_err(Error::RoomParse)?;
 
+    println!("Initial state:");
     println!("{}", initial_state);
+
+    for (move_, trans_state) in initial_state.transitions(&mut game) {
+        println!("Transition found for {:?} move:", move_);
+        println!("{}", trans_state);
+    }
+
     Ok(())
 }
