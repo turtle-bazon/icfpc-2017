@@ -8,6 +8,7 @@ use std::io::Read;
 use clap::Arg;
 
 mod map;
+mod game;
 mod parser;
 
 fn main() {
@@ -28,6 +29,7 @@ enum Error {
     RoomFileOpen(io::Error),
     RoomFileRead(io::Error),
     RoomParse(parser::Error),
+    Game(game::Error),
 }
 
 fn run() -> Result<(), Error> {
@@ -50,9 +52,9 @@ fn run() -> Result<(), Error> {
     file.read_to_string(&mut contents)
         .map_err(Error::RoomFileRead)?;
 
-    let parsed_room = parser::parse_map(contents.as_bytes())
+    let (game, initial_state) = parser::parse(contents.as_bytes())
         .map_err(Error::RoomParse)?;
 
-    println!("{:?}", parsed_room);
+    println!("{}", game.get_state(initial_state).map_err(Error::Game)?);
     Ok(())
 }
