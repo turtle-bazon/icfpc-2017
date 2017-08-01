@@ -1,6 +1,6 @@
 use nom::{self, IResult};
 use super::map::{Tile, Room};
-use super::game::{Game, GameStateId};
+use super::game::{Game, GameState};
 
 #[derive(PartialEq)]
 pub enum DataElement {
@@ -83,7 +83,7 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
     }
 }
 
-fn make_init_state(game: &mut Game, width: usize, rd: &Vec<Vec<DataElement>>) -> Result<GameStateId, Error> {
+fn make_init_state(game: &mut Game, width: usize, rd: &Vec<Vec<DataElement>>) -> Result<GameState, Error> {
     let coords_of = |el1, el2| rd
         .iter()
         .flat_map(|l| l.iter())
@@ -93,10 +93,12 @@ fn make_init_state(game: &mut Game, width: usize, rd: &Vec<Vec<DataElement>>) ->
     let player = coords_of(DataElement::Player, DataElement::Player)
         .next()
         .ok_or(Error::InvalidPlayerStartPositionsCount(0))?;
-    Ok(game.add_state(player, coords_of(DataElement::Crate, DataElement::CrateOnDst)))
+    let crates: Vec<_> = coords_of(DataElement::Crate, DataElement::CrateOnDst).collect();
+    let placement = game.make_placement(player, &crates);
+    Ok(game.make_game_state(placement))
 }
 
-pub fn parse(input: &[u8]) -> Result<(Game, GameStateId), Error> {
+pub fn parse(input: &[u8]) -> Result<(Game, GameState), Error> {
     let rd: Vec<Vec<DataElement> >  = match roomdef(input) {
         IResult::Done(_, rdb) =>
             rdb,
@@ -110,6 +112,6 @@ pub fn parse(input: &[u8]) -> Result<(Game, GameStateId), Error> {
     let room = make_room(width, height, &rd)?;
 
     let mut game = Game::new(room);
-    let init_state_id = make_init_state(&mut game, width, &rd)?;
-    Ok((game, init_state_id))
+    let init_state = make_init_state(&mut game, width, &rd)?;
+    Ok((game, init_state))
 }

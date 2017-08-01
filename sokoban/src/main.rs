@@ -55,6 +55,6 @@ fn run() -> Result<(), Error> {
     let (game, initial_state) = parser::parse(contents.as_bytes())
         .map_err(Error::RoomParse)?;
 
-    println!("{}", game.get_state(initial_state).map_err(Error::Game)?);
+    println!("{}", initial_state);
     Ok(())
 }

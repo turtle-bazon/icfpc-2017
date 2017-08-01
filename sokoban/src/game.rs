@@ -1,16 +1,22 @@
 use std::fmt;
+use std::rc::Rc;
+use std::collections::HashSet;
 use super::map::{Tile, Room};
 
 pub type Coords = (isize, isize);
-pub type GameStateId = usize;
 
-pub struct GameState<'a> {
-    pub room: &'a Room,
-    pub player: &'a Coords,
-    pub crates: &'a [Coords],
+#[derive(Hash)]
+pub struct Placement {
+    pub player: Coords,
+    pub crates: Rc<Vec<Coords>>,
 }
 
-impl<'a> fmt::Display for GameState<'a> {
+pub struct GameState {
+    pub room: Rc<Room>,
+    pub placement: Placement,
+}
+
+impl fmt::Display for GameState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Room {}x{}, {} crates",
                self.room.width,
@@ -23,10 +29,14 @@ impl<'a> fmt::Display for GameState<'a> {
                 writeln!(f, "")?;
             }
             let pos = (row, col);
-            if self.player == &pos {
+            if self.placement.player == pos {
                 write!(f, "I")?;
-            } else if self.crates.iter().any(|&coord| coord == pos) {
-                write!(f, "+")?;
+            } else if self.placement.crates.iter().any(|&coord| coord == pos) {
+                if let &Tile::CrateDst = tile {
+                    write!(f, "*")?;
+                } else {
+                    write!(f, "+")?;
+                }
             } else {
                 write!(f, "{}", match tile {
                     &Tile::Wall => '#',
@@ -40,49 +50,49 @@ impl<'a> fmt::Display for GameState<'a> {
 }
 
 pub struct Game {
-    room: Room,
-    coords_buf: Vec<Coords>,
+    room: Rc<Room>,
+    crates_pos_buf: HashSet<Rc<Vec<Coords>>>,
 }
 
 #[derive(Debug)]
 pub enum Error {
-    InvalidGameStateId(GameStateId),
 }
 
 impl Game {
     pub fn new(room: Room) -> Game {
         Game {
-            room: room,
-            coords_buf: Vec::new(),
+            room: Rc::new(room),
+            crates_pos_buf: HashSet::new(),
         }
     }
 
-    pub fn add_state<I>(&mut self, player: Coords, crates: I) -> GameStateId
-        where I: Iterator<Item = Coords>
-    {
-        let id = self.coords_buf.len();
-        self.coords_buf.push(player);
-        self.coords_buf.extend(crates);
-        id
+    pub fn make_placement(&mut self, player: Coords, crates: &Vec<Coords>) -> Placement {
+        let (buffered_crates_pos, insert_p) =
+            if let Some(bc) = self.crates_pos_buf.get(crates) {
+                (bc.clone(), false)
+            } else {
+                let bc = Rc::new(crates.clone());
+                (bc, true)
+            };
+        if insert_p {
+            self.crates_pos_buf.insert(buffered_crates_pos.clone());
+        }
+        Placement {
+            player: player,
+            crates: buffered_crates_pos,
+        }
     }
 
-    pub fn get_state<'a>(&'a self, state_id: GameStateId) -> Result<GameState<'a>, Error> {
-        let state_len = 1 + self.room.crates_count;
-        println!("{}", self.coords_buf.len());
-        if state_id + state_len > self.coords_buf.len() {
-            Err(Error::InvalidGameStateId(state_id))
-        } else {
-            Ok(GameState {
-                room: &self.room,
-                player: &self.coords_buf[state_id],
-                crates: &self.coords_buf[state_id + 1 .. state_id + state_len],
-            })
+    pub fn make_game_state(&self, placement: Placement) -> GameState {
+        GameState {
+            room: self.room.clone(),
+            placement: placement,
         }
     }
 }
 
-impl<'a> GameState<'a> {
-    pub fn room_at(&self, coord: Coords) -> Option<&'a Tile> {
+impl GameState {
+    pub fn room_at(&self, coord: Coords) -> Option<&Tile> {
         let width = self.room.width as isize;
         let height = self.room.height as isize;
         if (coord.0 < 0) || (coord.0 >= height) || (coord.1 < 0) || (coord.1 >= width) {
@@ -91,6 +101,10 @@ impl<'a> GameState<'a> {
             let index = coord.0 * width + coord.1;
             Some(&self.room.content[index as usize])
         }
+    }
+
+    pub fn crate_at(&self, coord: Coords, crates: &[Coords]) -> Option<usize> {
+        crates.iter().position(|c| c == &coord)
     }
 
 
