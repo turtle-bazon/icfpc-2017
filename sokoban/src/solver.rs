@@ -58,7 +58,6 @@ pub mod a_star {
         }
 
         let mut visited = HashSet::new();
-        visited.insert(initial_state.placement.clone());
 
         let mut pq = BinaryHeap::new();
         pq.push(Node::new(initial_state, Vec::new()));
@@ -69,6 +68,7 @@ pub mod a_star {
             if finished {
                 return Some(path);
             }
+            visited.insert(state.placement.clone());
 
             for (move_, trans_state) in state.transitions(game) {
                 if visited.contains(&trans_state.placement) {

@@ -322,6 +322,34 @@ mod test {
         assert!(state.finished());
     }
 
+    #[test]
+    fn no_move_north() {
+        let room_txt = "@\n#\n+\nI\n";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_east() {
+        let room_txt = "I+#@";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_south() {
+        let room_txt = "I\n+\n#\n@\n";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_west() {
+        let room_txt = "@#+I";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
     fn one_step(room_txt: &'static str) -> (Move, GameState) {
         let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
         init_state.transitions(&mut game).next().unwrap()
