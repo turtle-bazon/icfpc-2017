@@ -164,21 +164,23 @@ impl<'a, 'b> Iterator for Transitions<'a, 'b> {
                 (player_row + rdd, player_col + cdd);
             let crates = &*self.state.placement.crates;
             if let Some(crate_index) = self.state.crate_at(&near_coord) {
-                let tile_after = self.state.room_at(&far_coord);
-                if tile_after.map(|t| [Tile::Floor, Tile::CrateDst].contains(t)).unwrap_or(false) {
-                    self.crates_pos.clear();
-                    let coords_iter = crates
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &coord)| if crate_index == i {
-                            far_coord
-                        } else {
-                            coord
-                        });
-                    self.crates_pos.extend(coords_iter);
-                    let placement =
-                        self.game.make_placement(near_coord, &self.crates_pos);
-                    return Some((move_, self.game.make_game_state(placement)));
+                if let None = self.state.crate_at(&far_coord) {
+                    let tile_after = self.state.room_at(&far_coord);
+                    if tile_after.map(|t| [Tile::Floor, Tile::CrateDst].contains(t)).unwrap_or(false) {
+                        self.crates_pos.clear();
+                        let coords_iter = crates
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &coord)| if crate_index == i {
+                                far_coord
+                            } else {
+                                coord
+                            });
+                        self.crates_pos.extend(coords_iter);
+                        let placement =
+                            self.game.make_placement(near_coord, &self.crates_pos);
+                        return Some((move_, self.game.make_game_state(placement)));
+                    }
                 }
             } else if self.state.room_at(&near_coord).map(|t| [Tile::Floor, Tile::CrateDst].contains(t)).unwrap_or(false) {
                 let placement = self.game.make_placement(near_coord, crates);
@@ -346,6 +348,34 @@ mod test {
     #[test]
     fn no_move_west() {
         let room_txt = "@#+I";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_north2() {
+        let room_txt = "@\n@\n+\n+\nI\n";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_east2() {
+        let room_txt = "I++@@";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_south2() {
+        let room_txt = "I\n+\n+\n@\n@\n";
+        let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        assert!(init_state.transitions(&mut game).next().is_none());
+    }
+
+    #[test]
+    fn no_move_west2() {
+        let room_txt = "@@++I";
         let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
         assert!(init_state.transitions(&mut game).next().is_none());
     }
