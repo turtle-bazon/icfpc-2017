@@ -22,9 +22,9 @@ pub mod a_star {
         }
 
         impl Node {
-            fn new(state: GameState) -> Node {
+            fn new(state: GameState, path: Vec<(Move, GameState)>) -> Node {
                 Node {
-                    path: Vec::new(),
+                    path: path,
                     finished: state.finished(),
                     cod: crates_on_dst_count(&state),
                     ncnd: nearest_crate_nearest_dst_sq_dist(&state),
@@ -45,7 +45,7 @@ pub mod a_star {
         impl Ord for Node {
             fn cmp(&self, other: &Node) -> Ordering {
                 self.finished.cmp(&other.finished)
-                    .then(other.cod.cmp(&self.cod))
+                    .then(self.cod.cmp(&other.cod))
                     .then(other.ncnd.cmp(&self.ncnd))
                     .then(other.nc.cmp(&self.nc))
             }
@@ -61,10 +61,10 @@ pub mod a_star {
         visited.insert(initial_state.placement.clone());
 
         let mut pq = BinaryHeap::new();
-        pq.push(Node::new(initial_state));
+        pq.push(Node::new(initial_state, Vec::new()));
 
         while let Some(Node { state, path, finished, .. }) = pq.pop() {
-            debug!("checking state: {}", state);
+            debug!("checking state by path: {:?}: {}", path.iter().map(|v| v.0).collect::<Vec<_>>(), state);
 
             if finished {
                 return Some(path);
@@ -76,7 +76,7 @@ pub mod a_star {
                 }
                 let mut next_path = path.clone();
                 next_path.push((move_, trans_state.clone()));
-                pq.push(Node::new(trans_state));
+                pq.push(Node::new(trans_state, next_path));
             }
         }
 
