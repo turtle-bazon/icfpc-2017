@@ -1,6 +1,6 @@
 pub type Coords = (isize, isize);
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Tile {
     Wall,
     Floor,
