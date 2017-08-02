@@ -180,7 +180,7 @@ impl<'a, 'b> Iterator for Transitions<'a, 'b> {
                         self.game.make_placement(near_coord, &self.crates_pos);
                     return Some((move_, self.game.make_game_state(placement)));
                 }
-            } else if let Some(&Tile::Floor) = self.state.room_at(&near_coord) {
+            } else if self.state.room_at(&near_coord).map(|t| [Tile::Floor, Tile::CrateDst].contains(t)).unwrap_or(false) {
                 let placement = self.game.make_placement(near_coord, crates);
                 return Some((move_, self.game.make_game_state(placement)));
             }
@@ -220,6 +220,34 @@ mod test {
         let (move_, state) = one_step(" I*");
         assert_eq!(move_, Move::West);
         assert_eq!(state.placement.player, (0, 0));
+    }
+
+    #[test]
+    fn move_north_dst() {
+        let (move_, state) = one_step("+\n@\nI\n*\n");
+        assert_eq!(move_, Move::North);
+        assert_eq!(state.placement.player, (1, 0));
+    }
+
+    #[test]
+    fn move_east_dst() {
+        let (move_, state) = one_step("*I@+");
+        assert_eq!(move_, Move::East);
+        assert_eq!(state.placement.player, (0, 2));
+    }
+
+    #[test]
+    fn move_south_dst() {
+        let (move_, state) = one_step("*\nI\n@\n+\n");
+        assert_eq!(move_, Move::South);
+        assert_eq!(state.placement.player, (2, 0));
+    }
+
+    #[test]
+    fn move_west_dst() {
+        let (move_, state) = one_step("+@I*");
+        assert_eq!(move_, Move::West);
+        assert_eq!(state.placement.player, (0, 1));
     }
 
     #[test]
