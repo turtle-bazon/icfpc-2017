@@ -30,7 +30,6 @@ enum Error {
     RoomFileOpen(io::Error),
     RoomFileRead(io::Error),
     RoomParse(parser::Error),
-    Game(game::Error),
 }
 
 fn run() -> Result<(), Error> {

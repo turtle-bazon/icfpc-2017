@@ -1,9 +1,7 @@
 use std::fmt;
 use std::rc::Rc;
 use std::collections::HashSet;
-use super::map::{Tile, Room};
-
-pub type Coords = (isize, isize);
+use super::map::{Coords, Tile, Room};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Placement {
@@ -11,6 +9,7 @@ pub struct Placement {
     pub crates: Rc<Vec<Coords>>,
 }
 
+#[derive(Clone)]
 pub struct GameState {
     pub room: Rc<Room>,
     pub placement: Placement,
@@ -21,7 +20,7 @@ impl fmt::Display for GameState {
         write!(f, "Room {}x{}, {} crates",
                self.room.width,
                self.room.height,
-               self.room.crates_count)?;
+               self.room.crates_dsts.len())?;
         for (coord, tile) in self.room.content.iter().enumerate() {
             let row = (coord / self.room.width) as isize;
             let col = (coord % self.room.width) as isize;
@@ -52,10 +51,6 @@ impl fmt::Display for GameState {
 pub struct Game {
     room: Rc<Room>,
     crates_pos_buf: HashSet<Rc<Vec<Coords>>>,
-}
-
-#[derive(Debug)]
-pub enum Error {
 }
 
 impl Game {
@@ -93,7 +88,7 @@ impl Game {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Move {
     North,
     East,

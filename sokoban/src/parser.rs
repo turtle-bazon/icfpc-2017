@@ -68,7 +68,13 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
         Ok(Room {
             width: width,
             height: height,
-            crates_count: crates_count,
+            crates_dsts: rd
+                .iter()
+                .enumerate()
+                .flat_map(move |(row, data_line)| data_line.iter().enumerate().map(move |v| (row, v)))
+                .filter(|&(_, (_, e))| e == &DataElement::CrateDst || e == &DataElement::CrateOnDst)
+                .map(|(row, (col, _))| (row as isize, col as isize))
+                .collect(),
             content: rd
                 .iter()
                 .flat_map(|data_line| data_line.iter().map(|e| match e {

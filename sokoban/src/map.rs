@@ -1,3 +1,5 @@
+pub type Coords = (isize, isize);
+
 #[derive(Debug)]
 pub enum Tile {
     Wall,
@@ -9,6 +11,6 @@ pub enum Tile {
 pub struct Room {
     pub width: usize,
     pub height: usize,
-    pub crates_count: usize,
+    pub crates_dsts: Vec<Coords>,
     pub content: Vec<Tile>,
 }
