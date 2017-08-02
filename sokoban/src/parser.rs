@@ -1,5 +1,5 @@
 use nom::{self, IResult};
-use super::map::{Tile, Room};
+use super::map::{Coords, Tile, Room};
 use super::game::{Game, GameState};
 
 #[derive(PartialEq)]
@@ -90,18 +90,25 @@ fn make_room(width: usize, height: usize, rd: &Vec<Vec<DataElement>>) -> Result<
 }
 
 fn make_init_state(game: &mut Game, width: usize, rd: &Vec<Vec<DataElement>>) -> Result<GameState, Error> {
-    let coords_of = |el1, el2| rd
-        .iter()
-        .flat_map(|l| l.iter())
-        .enumerate()
-        .filter(move |&(_, ref e)| e == &&el1 || e == &&el2)
-        .map(|(coord, _)| ((coord / width) as isize, (coord % width) as isize));
-    let player = coords_of(DataElement::Player, DataElement::Player)
-        .next()
-        .ok_or(Error::InvalidPlayerStartPositionsCount(0))?;
-    let crates: Vec<_> = coords_of(DataElement::Crate, DataElement::CrateOnDst).collect();
-    let placement = game.make_placement(player, &crates);
-    Ok(game.make_game_state(placement))
+    let coords_of = |els: &[DataElement]| -> Vec<Coords> {
+        rd
+            .iter()
+            .flat_map(|l| l.iter())
+            .enumerate()
+            .filter(move |&(_, ref e)| els.iter().any(|el| el == *e))
+            .map(|(coord, _)| ((coord / width) as isize, (coord % width) as isize)).collect()
+    };
+    let player_coords = coords_of(&[DataElement::Player]);
+
+    if player_coords.len() == 1 {
+        let player = player_coords[0];
+        let crates: Vec<_> = coords_of(&[DataElement::Crate, DataElement::CrateOnDst]);    
+        let placement = game.make_placement(player, &crates);
+        
+        Ok(game.make_game_state(placement))
+    } else {
+        Err(Error::InvalidPlayerStartPositionsCount(0))
+    }
 }
 
 pub fn parse(input: &[u8]) -> Result<(Game, GameState), Error> {
