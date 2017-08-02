@@ -223,6 +223,42 @@ mod test {
     }
 
     #[test]
+    fn move_crate_north() {
+        let (move_, state) = one_step("@\n \n+\nI\n");
+        assert_eq!(move_, Move::North);
+        assert_eq!(state.placement.player, (2, 0));
+        assert_eq!(state.placement.crates, Rc::new(vec![(1, 0)]));
+        assert!(!state.finished());
+    }
+
+    #[test]
+    fn move_crate_east() {
+        let (move_, state) = one_step("I+ @");
+        assert_eq!(move_, Move::East);
+        assert_eq!(state.placement.player, (0, 1));
+        assert_eq!(state.placement.crates, Rc::new(vec![(0, 2)]));
+        assert!(!state.finished());
+    }
+
+    #[test]
+    fn move_crate_south() {
+        let (move_, state) = one_step("I\n+\n \n@\n");
+        assert_eq!(move_, Move::South);
+        assert_eq!(state.placement.player, (1, 0));
+        assert_eq!(state.placement.crates, Rc::new(vec![(2, 0)]));
+        assert!(!state.finished());
+    }
+
+    #[test]
+    fn move_crate_west() {
+        let (move_, state) = one_step("@ +I");
+        assert_eq!(move_, Move::West);
+        assert_eq!(state.placement.player, (0, 2));
+        assert_eq!(state.placement.crates, Rc::new(vec![(0, 1)]));
+        assert!(!state.finished());
+    }
+
+    #[test]
     fn move_crate_north_finish() {
         let (move_, state) = one_step("@\n+\nI\n*\n");
         assert_eq!(move_, Move::North);
