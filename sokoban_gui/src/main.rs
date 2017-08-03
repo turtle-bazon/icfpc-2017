@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use clap::Arg;
 use piston_window::{OpenGL, PistonWindow, WindowSettings, G2dTexture, Viewport};
 use sokoban::map::{Coords, Tile, Room};
+use sokoban::game::GameState;
 
 fn main() {
     env_logger::init().unwrap();
@@ -78,13 +79,15 @@ fn run() -> Result<(), Error> {
         window.draw_2d(&event, |context, g2d| {
             use piston_window::{clear, image, Image};
             clear([0.0; 4], g2d);
-            draw_room(&init_state.room, |coords, room, tile| {
+            draw_scene(&init_state, |coords, room, sprite| {
                 Image::new()
                     .rect(translate_tile_coords(&context.viewport, room, coords))
-                    .draw(match tile {
-                        &Tile::Wall => &textures.wall,
-                        &Tile::Floor => &textures.floor,
-                        &Tile::CrateDst => &textures.dst,
+                    .draw(match sprite {
+                        Sprite::Tile(&Tile::Wall) => &textures.wall,
+                        Sprite::Tile(&Tile::Floor) => &textures.floor,
+                        Sprite::Tile(&Tile::CrateDst) => &textures.dst,
+                        Sprite::Player => &textures.player,
+                        Sprite::Crate => &textures.crate_,
                     }, &Default::default(), context.transform, g2d);
             });
         });
@@ -93,15 +96,25 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
-fn draw_room<DT>(room: &Room, mut draw_tile: DT) where DT: FnMut(Coords, &Room, &Tile) {
-    for (i, tile) in room.content.iter().enumerate() {
-        let row = i / room.width;
-        let col = i % room.width;
-        draw_tile((row as isize, col as isize), room, tile);
+enum Sprite<'a> {
+    Tile(&'a Tile),
+    Player,
+    Crate,
+}
+
+fn draw_scene<DS>(state: &GameState, mut draw_sprite: DS) where DS: for<'a> FnMut(&Coords, &Room, Sprite<'a>) {
+    for (i, tile) in state.room.content.iter().enumerate() {
+        let row = i / state.room.width;
+        let col = i % state.room.width;
+        draw_sprite(&(row as isize, col as isize), &state.room, Sprite::Tile(tile));
+    }
+    draw_sprite(&state.placement.player, &state.room, Sprite::Player);
+    for crate_coord in state.placement.crates.iter() {
+        draw_sprite(crate_coord, &state.room, Sprite::Crate);
     }
 }
 
-fn translate_tile_coords(viewport: &Option<Viewport>, room: &Room, (row, cell): Coords) -> [f64; 4] {
+fn translate_tile_coords(viewport: &Option<Viewport>, room: &Room, &(row, cell): &Coords) -> [f64; 4] {
     let (w, h) = viewport
         .map(|v| (v.draw_size[0], v.draw_size[1]))
         .unwrap_or((640, 480));
