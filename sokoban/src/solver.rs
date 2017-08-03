@@ -121,6 +121,7 @@ pub mod a_star {
                 state.room
                     .crates_dsts
                     .iter()
+                    .filter(|&&dc| !state.placement.crates.iter().any(|&c| c == dc))
                     .map(|dcoord| sq_dist(dcoord, coord))
                     .min()
             })
