@@ -4,11 +4,13 @@ extern crate piston_window;
 #[macro_use] extern crate log;
 #[macro_use] extern crate clap;
 
-use std::{process};
+use std::{io, thread, process};
+use std::sync::mpsc;
 use std::path::{Path, PathBuf};
 use clap::Arg;
 use sokoban::map::{Coords, Tile, Room};
-use sokoban::game::{Game, GameState};
+use sokoban::game::{Move, Game, GameState};
+use sokoban::solver;
 use piston_window::{
     OpenGL,
     PistonWindow,
@@ -39,6 +41,9 @@ enum Error {
     MissingParameter(&'static str),
     Sokoban(sokoban::Error),
     Piston(PistonError),
+    SolverThreadSpawn(io::Error),
+    SolverThreadJoin(Box<std::any::Any + Send + 'static>),
+    SolverThreadUnexpectedShutdown,
 }
 
 #[derive(Debug)]
@@ -92,10 +97,10 @@ fn run() -> Result<(), Error> {
             error: e,
         }))?;
 
-    let (mut game, init_state) = sokoban::init_room(room_file)
+    let (game, init_state) = sokoban::init_room(room_file)
         .map_err(Error::Sokoban)?;
 
-    let mut gui_state = GuiState::Init(init_state);
+    let mut gui_state = GuiState::Init { game: game, state: init_state, };
     while let Some(event) = window.next() {
         window.draw_2d(&event, |context, g2d| {
             use piston_window::{clear, Image, text, Transformed};
@@ -122,42 +127,119 @@ fn run() -> Result<(), Error> {
         });
 
         if let Some(Button::Keyboard(key)) = event.press_args() {
-            gui_state = gui_state.process_key(key, &mut game);
+            gui_state = gui_state.process_key(key)?;
         }
+
+        gui_state = gui_state.tick()?;
     }
 
     Ok(())
 }
 
 enum GuiState {
-    Init(GameState),
-    Solving(GameState),
+    Init {
+        game: Game,
+        state: GameState,
+    },
+    Solving {
+        state: GameState,
+        rx: mpsc::Receiver<(Game, Option<Vec<(Move, GameState)>>)>,
+        handle: thread::JoinHandle<()>,
+    },
+    NoSolution(GameState),
+    Solution {
+        solution: Vec<GameState>,
+        step: usize,
+    },
 }
 
 impl GuiState {
     fn console(&self) -> String {
         match self {
-            &GuiState::Init(..) =>
-                "Map loaded. Press <s> to solve.".to_string(),
-            &GuiState::Solving(..) =>
-                "Solving...".to_string(),
+            &GuiState::Init { .. } =>
+                "Map loaded. Press <S> to solve.".to_string(),
+            &GuiState::Solving { .. } =>
+                "Solving, please wait...".to_string(),
+            &GuiState::NoSolution(..) =>
+                "No solution found :( Press <ESC> to quit.".to_string(),
+            &GuiState::Solution { ref solution, step, } =>
+                format!("Solution found: step {} of {}. Press <N> for next step or <P> for previous.",
+                        step + 1, solution.len()),
         }
     }
 
     fn get_state(&self) -> &GameState {
         match self {
-            &GuiState::Init(ref s) => s,
-            &GuiState::Solving(ref s) => s,
+            &GuiState::Init { state: ref s, .. } => s,
+            &GuiState::Solving { state: ref s, .. } => s,
+            &GuiState::NoSolution(ref s) => s,
+            &GuiState::Solution { ref solution, step, } => &solution[step],
         }
     }
 
-    fn process_key(self, key: Key, game: &mut Game) -> GuiState {
-        match (self, key) {
-            (GuiState::Init(state), Key::S) => {
-                GuiState::Solving(state)
+    fn process_key(self, key: Key) -> Result<GuiState, Error> {
+        Ok(match (self, key) {
+            (GuiState::Init { mut game, state, }, Key::S) => {
+                let (tx, rx) = mpsc::channel();
+                let init_state = state.clone();
+                let handle = thread::Builder::new()
+                    .name("solver background thread".to_string())
+                    .spawn(move || {
+                        let solution = solver::a_star::solve(&mut game, init_state);
+                        tx.send((game, solution)).ok();
+                    })
+                    .map_err(Error::SolverThreadSpawn)?;
+                GuiState::Solving {
+                    state: state,
+                    rx: rx,
+                    handle: handle,
+                }
             },
+            (GuiState::Solution { solution, step, }, Key::P) =>
+                GuiState::Solution {
+                    step: if step == 0 { 0 } else { step - 1 },
+                    solution: solution,
+                },
+            (GuiState::Solution { solution, step, }, Key::N) =>
+                GuiState::Solution {
+                    step: if step + 1 >= solution.len() { step } else { step + 1 },
+                    solution: solution,
+                },
             (other, _) =>
                 other,
+        })
+    }
+
+    fn tick(self) -> Result<GuiState, Error> {
+        match self {
+            GuiState::Solving { state, rx, handle } => {
+                match rx.try_recv() {
+                    Ok((_, None)) => {
+                        let () = handle.join().map_err(Error::SolverThreadJoin)?;
+                        Ok(GuiState::NoSolution(state))
+                    },
+                    Ok((_game, Some(solution))) => {
+                        let () = handle.join().map_err(Error::SolverThreadJoin)?;
+                        let mut full_solution = Vec::with_capacity(solution.len() + 1);
+                        full_solution.push(state);
+                        full_solution.extend(solution.into_iter().map(|v| v.1));
+                        Ok(GuiState::Solution {
+                            solution: full_solution,
+                            step: 0,
+                        })
+                    },
+                    Err(mpsc::TryRecvError::Empty) =>
+                        Ok(GuiState::Solving {
+                            state: state,
+                            rx: rx,
+                            handle: handle,
+                        }),
+                    Err(mpsc::TryRecvError::Disconnected) =>
+                        Err(Error::SolverThreadUnexpectedShutdown),
+                }
+            },
+            other =>
+                Ok(other),
         }
     }
 }
