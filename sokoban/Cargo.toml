@@ -7,5 +7,3 @@ authors = ["Azamat S. Kalimoulline <turtle@bazon.ru>",
 [dependencies]
 nom = "^3.1"
 log = "0.3"
-clap = "2.24"
-env_logger = "0.4"
