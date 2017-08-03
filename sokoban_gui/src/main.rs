@@ -7,8 +7,8 @@ extern crate piston_window;
 use std::process;
 use std::path::{Path, PathBuf};
 use clap::Arg;
-use piston_window::{OpenGL, PistonWindow, WindowSettings, G2dTexture};
-//use sokoban::{game, solver};
+use piston_window::{OpenGL, PistonWindow, WindowSettings, G2dTexture, Viewport};
+use sokoban::map::{Coords, Tile, Room};
 
 fn main() {
     env_logger::init().unwrap();
@@ -77,27 +77,32 @@ fn run() -> Result<(), Error> {
     while let Some(event) = window.next() {
         window.draw_2d(&event, |context, g2d| {
             use piston_window::{clear, image, Image};
-            clear([1.0; 4], g2d);
-            Image::new()
-                .rect([0.0, 0.0, 32.0, 32.0])
-                .draw(&textures.crate_, &Default::default(), context.transform, g2d);
-            Image::new()
-                .rect([32.0, 0.0, 32.0, 32.0])
-                .draw(&textures.dst, &Default::default(), context.transform, g2d);
-            Image::new()
-                .rect([64.0, 0.0, 32.0, 32.0])
-                .draw(&textures.floor, &Default::default(), context.transform, g2d);
-            Image::new()
-                .rect([0.0, 32.0, 32.0, 32.0])
-                .draw(&textures.player, &Default::default(), context.transform, g2d);
-            Image::new()
-                .rect([32.0, 32.0, 32.0, 32.0])
-                .draw(&textures.wall, &Default::default(), context.transform, g2d);
-
+            clear([0.0; 4], g2d);
+            draw_room(&init_state.room, |coords, tile| {
+                Image::new()
+                    .rect(translate_tile_coords(&context.viewport, coords))
+                    .draw(match tile {
+                        &Tile::Wall => &textures.wall,
+                        &Tile::Floor => &textures.floor,
+                        &Tile::CrateDst => &textures.dst,
+                    }, &Default::default(), context.transform, g2d);
+            });
         });
     }
 
     Ok(())
+}
+
+fn draw_room<DT>(room: &Room, mut draw_tile: DT) where DT: FnMut(Coords, &Tile) {
+    for (i, tile) in room.content.iter().enumerate() {
+        let row = i / room.width;
+        let col = i % room.width;
+        draw_tile((row as isize, col as isize), tile);
+    }
+}
+
+fn translate_tile_coords(viewport: &Option<Viewport>, (row, cell): Coords) -> [f64; 4] {
+    [cell as f64 * 32.0, row as f64 * 32.0, 32.0, 32.0]
 }
 
 struct SokobanTextures {
