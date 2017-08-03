@@ -11,7 +11,9 @@ pub mod a_star {
     use super::super::map::{Tile, Coords};
     use super::super::game::{Game, GameState, Move};
 
-    pub fn solve(game: &mut Game, initial_state: GameState) -> Option<Vec<(Move, GameState)>> {
+    pub fn solve<F>(game: &mut Game, initial_state: GameState, mut step_debug_fn: Option<F>) -> Option<Vec<(Move, GameState)>>
+        where F: FnMut(&Vec<(Move, GameState)>, &GameState, bool, usize, usize, usize)
+    {
         struct Node {
             state: GameState,
             path: Vec<(Move, GameState)>,
@@ -62,8 +64,10 @@ pub mod a_star {
         let mut pq = BinaryHeap::new();
         pq.push(Node::new(initial_state, Vec::new()));
 
-        while let Some(Node { state, path, finished, .. }) = pq.pop() {
-            debug!("checking state by path: {:?}: {}", path.iter().map(|v| v.0).collect::<Vec<_>>(), state);
+        while let Some(Node { state, path, finished, cod, ncnd, nc, }) = pq.pop() {
+            if let Some(ref mut debug_fn) = step_debug_fn {
+                debug_fn(&path, &state, finished, cod, ncnd, nc);
+            }
 
             if finished {
                 return Some(path);
