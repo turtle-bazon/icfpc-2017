@@ -1,17 +1,17 @@
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::collections::HashSet;
 use super::map::{Coords, Tile, Room};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Placement {
     pub player: Coords,
-    pub crates: Rc<Vec<Coords>>,
+    pub crates: Arc<Vec<Coords>>,
 }
 
 #[derive(Clone)]
 pub struct GameState {
-    pub room: Rc<Room>,
+    pub room: Arc<Room>,
     pub placement: Placement,
 }
 
@@ -49,14 +49,14 @@ impl fmt::Display for GameState {
 }
 
 pub struct Game {
-    room: Rc<Room>,
-    crates_pos_buf: HashSet<Rc<Vec<Coords>>>,
+    room: Arc<Room>,
+    crates_pos_buf: HashSet<Arc<Vec<Coords>>>,
 }
 
 impl Game {
     pub fn new(room: Room) -> Game {
         Game {
-            room: Rc::new(room),
+            room: Arc::new(room),
             crates_pos_buf: HashSet::new(),
         }
     }
@@ -68,7 +68,7 @@ impl Game {
             } else {
                 let mut crates_clone = crates.clone();
                 crates_clone.sort();
-                let bc = Rc::new(crates_clone);
+                let bc = Arc::new(crates_clone);
                 (bc, true)
             };
         if insert_p {
@@ -192,7 +192,7 @@ impl<'a, 'b> Iterator for Transitions<'a, 'b> {
 
 #[cfg(test)]
 mod test {
-    use std::rc::Rc;
+    use std::sync::Arc;
     use super::{Move, GameState};
     use super::super::parser;
 
@@ -257,7 +257,7 @@ mod test {
         let (move_, state) = one_step("@\n \n+\nI\n");
         assert_eq!(move_, Move::North);
         assert_eq!(state.placement.player, (2, 0));
-        assert_eq!(state.placement.crates, Rc::new(vec![(1, 0)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(1, 0)]));
         assert!(!state.finished());
     }
 
@@ -266,7 +266,7 @@ mod test {
         let (move_, state) = one_step("I+ @");
         assert_eq!(move_, Move::East);
         assert_eq!(state.placement.player, (0, 1));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 2)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 2)]));
         assert!(!state.finished());
     }
 
@@ -275,7 +275,7 @@ mod test {
         let (move_, state) = one_step("I\n+\n \n@\n");
         assert_eq!(move_, Move::South);
         assert_eq!(state.placement.player, (1, 0));
-        assert_eq!(state.placement.crates, Rc::new(vec![(2, 0)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(2, 0)]));
         assert!(!state.finished());
     }
 
@@ -284,7 +284,7 @@ mod test {
         let (move_, state) = one_step("@ +I");
         assert_eq!(move_, Move::West);
         assert_eq!(state.placement.player, (0, 2));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 1)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 1)]));
         assert!(!state.finished());
     }
 
@@ -293,7 +293,7 @@ mod test {
         let (move_, state) = one_step("@\n+\nI\n*\n");
         assert_eq!(move_, Move::North);
         assert_eq!(state.placement.player, (1, 0));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 0), (3, 0)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 0), (3, 0)]));
         assert!(state.finished());
     }
 
@@ -302,7 +302,7 @@ mod test {
         let (move_, state) = one_step("*I+@");
         assert_eq!(move_, Move::East);
         assert_eq!(state.placement.player, (0, 2));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 0), (0, 3)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 0), (0, 3)]));
         assert!(state.finished());
     }
 
@@ -311,7 +311,7 @@ mod test {
         let (move_, state) = one_step("*\nI\n+\n@");
         assert_eq!(move_, Move::South);
         assert_eq!(state.placement.player, (2, 0));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 0), (3, 0)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 0), (3, 0)]));
         assert!(state.finished());
     }
 
@@ -320,7 +320,7 @@ mod test {
         let (move_, state) = one_step("@+I*");
         assert_eq!(move_, Move::West);
         assert_eq!(state.placement.player, (0, 1));
-        assert_eq!(state.placement.crates, Rc::new(vec![(0, 0), (0, 3)]));
+        assert_eq!(state.placement.crates, Arc::new(vec![(0, 0), (0, 3)]));
         assert!(state.finished());
     }
 
