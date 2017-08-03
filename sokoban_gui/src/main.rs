@@ -136,6 +136,25 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
+struct DebugStep {
+    moves: Vec<Move>,
+    state: GameState,
+    finished: bool,
+    crates_on_dst_count: usize,
+    nearest_crate_nearest_dst_sq_dist: usize,
+    nearest_crate_sq_dist: usize,
+}
+
+enum DebugPacket {
+    Step(DebugStep),
+    Done(Game, Option<Vec<(Move, GameState)>>),
+}
+
+enum DebugStepMode {
+    WantRecv,
+    WantSend,
+}
+
 enum GuiState {
     Init {
         game: Game,
@@ -151,13 +170,20 @@ enum GuiState {
         solution: Vec<GameState>,
         step: usize,
     },
+    DebugSolve {
+        mode: DebugStepMode,
+        step: DebugStep,
+        tx: mpsc::Sender<()>,
+        rx: mpsc::Receiver<DebugPacket>,
+        handle: thread::JoinHandle<()>,
+    },
 }
 
 impl GuiState {
     fn console(&self) -> String {
         match self {
             &GuiState::Init { .. } =>
-                "Map loaded. Press <S> to solve.".to_string(),
+                "Map loaded. Press <S> to solve or <D> to solve in debug mode.".to_string(),
             &GuiState::Solving { .. } =>
                 "Solving, please wait...".to_string(),
             &GuiState::NoSolution(..) =>
@@ -165,6 +191,17 @@ impl GuiState {
             &GuiState::Solution { ref solution, step, } =>
                 format!("Solution found: step {} of {}. Press <N> for next step or <P> for previous.",
                         step + 1, solution.len()),
+            &GuiState::DebugSolve { ref mode, ref step, .. } =>
+                format!("Inspecting state: finished: {}, cod/ncnd/nc: {}/{}/{}.{} Path so far: {:?}",
+                        step.finished,
+                        step.crates_on_dst_count,
+                        step.nearest_crate_nearest_dst_sq_dist,
+                        step.nearest_crate_sq_dist,
+                        match mode {
+                            &DebugStepMode::WantRecv => "",
+                            &DebugStepMode::WantSend => " Press <N> for next step.",
+                        },
+                        step.moves),
         }
     }
 
@@ -174,6 +211,7 @@ impl GuiState {
             &GuiState::Solving { state: ref s, .. } => s,
             &GuiState::NoSolution(ref s) => s,
             &GuiState::Solution { ref solution, step, } => &solution[step],
+            &GuiState::DebugSolve { ref step, .. } => &step.state,
         }
     }
 
@@ -195,6 +233,42 @@ impl GuiState {
                     handle: handle,
                 }
             },
+            (GuiState::Init { mut game, state, }, Key::D) => {
+                let (master_tx, slave_rx) = mpsc::channel();
+                let (slave_tx, master_rx) = mpsc::channel();
+                let init_state = state.clone();
+                let handle = thread::Builder::new()
+                    .name("debug solver background thread".to_string())
+                    .spawn(move || {
+                        let solution = solver::a_star::solve_debug(&mut game, init_state, |moves, st, finished, cod, ncnd, nc| {
+                            slave_tx.send(DebugPacket::Step(DebugStep {
+                                moves: moves.iter().map(|v| v.0).collect(),
+                                state: st.clone(),
+                                finished: finished,
+                                crates_on_dst_count: cod,
+                                nearest_crate_nearest_dst_sq_dist: ncnd,
+                                nearest_crate_sq_dist: nc,
+                            })).ok();
+                            slave_rx.recv().ok();
+                        });
+                        slave_tx.send(DebugPacket::Done(game, solution)).ok();
+                    })
+                    .map_err(Error::SolverThreadSpawn)?;
+                GuiState::DebugSolve {
+                    mode: DebugStepMode::WantRecv,
+                    step: DebugStep {
+                        moves: vec![],
+                        state: state,
+                        finished: false,
+                        crates_on_dst_count: 0,
+                        nearest_crate_nearest_dst_sq_dist: 0,
+                        nearest_crate_sq_dist: 0,
+                    },
+                    tx: master_tx,
+                    rx: master_rx,
+                    handle: handle,
+                }
+            },
             (GuiState::Solution { solution, step, }, Key::P) =>
                 GuiState::Solution {
                     step: if step == 0 { 0 } else { step - 1 },
@@ -205,6 +279,16 @@ impl GuiState {
                     step: if step + 1 >= solution.len() { step } else { step + 1 },
                     solution: solution,
                 },
+            (GuiState::DebugSolve { mode: DebugStepMode::WantSend, step, tx, rx, handle, }, Key::N) => {
+                tx.send(()).map_err(|_| Error::SolverThreadUnexpectedShutdown)?;
+                GuiState::DebugSolve {
+                    mode: DebugStepMode::WantRecv,
+                    step: step,
+                    tx: tx,
+                    rx: rx,
+                    handle: handle,
+                }
+            },
             (other, _) =>
                 other,
         })
@@ -212,7 +296,7 @@ impl GuiState {
 
     fn tick(self) -> Result<GuiState, Error> {
         match self {
-            GuiState::Solving { state, rx, handle } => {
+            GuiState::Solving { state, rx, handle } =>
                 match rx.try_recv() {
                     Ok((_, None)) => {
                         let () = handle.join().map_err(Error::SolverThreadJoin)?;
@@ -236,8 +320,39 @@ impl GuiState {
                         }),
                     Err(mpsc::TryRecvError::Disconnected) =>
                         Err(Error::SolverThreadUnexpectedShutdown),
-                }
-            },
+                },
+            GuiState::DebugSolve { mode: DebugStepMode::WantRecv, step, tx, rx, handle, } =>
+                match rx.try_recv() {
+                    Ok(DebugPacket::Step(next_step)) =>
+                        Ok(GuiState::DebugSolve {
+                            mode: DebugStepMode::WantSend,
+                            step: next_step,
+                            tx: tx,
+                            rx: rx,
+                            handle: handle,
+                        }),
+                    Ok(DebugPacket::Done(_, None)) => {
+                        let () = handle.join().map_err(Error::SolverThreadJoin)?;
+                        Ok(GuiState::NoSolution(step.state))
+                    },
+                    Ok(DebugPacket::Done(_game, Some(solution))) => {
+                        let () = handle.join().map_err(Error::SolverThreadJoin)?;
+                        Ok(GuiState::Solution {
+                            solution: solution.into_iter().map(|v| v.1).collect(),
+                            step: 0,
+                        })
+                    },
+                    Err(mpsc::TryRecvError::Empty) =>
+                        Ok(GuiState::DebugSolve {
+                            mode: DebugStepMode::WantRecv,
+                            step: step,
+                            tx: tx,
+                            rx: rx,
+                            handle: handle,
+                        }),
+                    Err(mpsc::TryRecvError::Disconnected) =>
+                        Err(Error::SolverThreadUnexpectedShutdown),
+                },
             other =>
                 Ok(other),
         }
