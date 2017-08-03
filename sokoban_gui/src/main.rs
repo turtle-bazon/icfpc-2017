@@ -78,9 +78,9 @@ fn run() -> Result<(), Error> {
         window.draw_2d(&event, |context, g2d| {
             use piston_window::{clear, image, Image};
             clear([0.0; 4], g2d);
-            draw_room(&init_state.room, |coords, tile| {
+            draw_room(&init_state.room, |coords, room, tile| {
                 Image::new()
-                    .rect(translate_tile_coords(&context.viewport, coords))
+                    .rect(translate_tile_coords(&context.viewport, room, coords))
                     .draw(match tile {
                         &Tile::Wall => &textures.wall,
                         &Tile::Floor => &textures.floor,
@@ -93,16 +93,26 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
-fn draw_room<DT>(room: &Room, mut draw_tile: DT) where DT: FnMut(Coords, &Tile) {
+fn draw_room<DT>(room: &Room, mut draw_tile: DT) where DT: FnMut(Coords, &Room, &Tile) {
     for (i, tile) in room.content.iter().enumerate() {
         let row = i / room.width;
         let col = i % room.width;
-        draw_tile((row as isize, col as isize), tile);
+        draw_tile((row as isize, col as isize), room, tile);
     }
 }
 
-fn translate_tile_coords(viewport: &Option<Viewport>, (row, cell): Coords) -> [f64; 4] {
-    [cell as f64 * 32.0, row as f64 * 32.0, 32.0, 32.0]
+fn translate_tile_coords(viewport: &Option<Viewport>, room: &Room, (row, cell): Coords) -> [f64; 4] {
+    let (w, h) = viewport
+        .map(|v| (v.draw_size[0], v.draw_size[1]))
+        .unwrap_or((640, 480));
+    let tile_width = w as f64 / room.width as f64;
+    let tile_height = h as f64 / room.height as f64;
+    let tile_side = if tile_width < tile_height {
+        tile_width
+    } else {
+        tile_height
+    };
+    [cell as f64 * tile_side, row as f64 * tile_side, tile_side, tile_side]
 }
 
 struct SokobanTextures {
