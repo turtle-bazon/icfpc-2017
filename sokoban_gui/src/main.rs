@@ -4,12 +4,23 @@ extern crate piston_window;
 #[macro_use] extern crate log;
 #[macro_use] extern crate clap;
 
-use std::process;
+use std::{process};
 use std::path::{Path, PathBuf};
 use clap::Arg;
-use piston_window::{OpenGL, PistonWindow, WindowSettings, G2dTexture, Viewport};
 use sokoban::map::{Coords, Tile, Room};
-use sokoban::game::GameState;
+use sokoban::game::{Game, GameState};
+use piston_window::{
+    OpenGL,
+    PistonWindow,
+    WindowSettings,
+    G2dTexture,
+    Viewport,
+    Glyphs,
+    PressEvent,
+    Button,
+    Key};
+
+const CONSOLE_HEIGHT: f64 = 32.0;
 
 fn main() {
     env_logger::init().unwrap();
@@ -34,6 +45,7 @@ enum Error {
 enum PistonError {
     BuildWindow(String),
     LoadTexture { file: String, error: String, },
+    LoadFont { file: String, error: piston_window::GlyphError, },
 }
 
 fn run() -> Result<(), Error> {
@@ -72,14 +84,31 @@ fn run() -> Result<(), Error> {
     let textures = load_textures(&mut window, assets_dir)
         .map_err(Error::Piston)?;
 
+    let mut font_path = PathBuf::from(assets_dir);
+    font_path.push("FiraSans-Regular.ttf");
+    let mut glyphs = Glyphs::new(&font_path, window.factory.clone())
+        .map_err(|e| Error::Piston(PistonError::LoadFont {
+            file: font_path.to_string_lossy().to_string(),
+            error: e,
+        }))?;
+
     let (mut game, init_state) = sokoban::init_room(room_file)
         .map_err(Error::Sokoban)?;
 
+    let mut gui_state = GuiState::Init(init_state);
     while let Some(event) = window.next() {
         window.draw_2d(&event, |context, g2d| {
-            use piston_window::{clear, image, Image};
-            clear([0.0; 4], g2d);
-            draw_scene(&init_state, |coords, room, sprite| {
+            use piston_window::{clear, Image, text, Transformed};
+            clear([0.0, 0.0, 0.0, 1.0], g2d);
+            text::Text::new_color([0.0, 1.0, 0.0, 1.0], 16).draw(
+                &gui_state.console(),
+                &mut glyphs,
+                &context.draw_state,
+                context.transform.trans(5.0, 20.0),
+                g2d
+            );
+
+            draw_scene(gui_state.get_state(), |coords, room, sprite| {
                 Image::new()
                     .rect(translate_tile_coords(&context.viewport, room, coords))
                     .draw(match sprite {
@@ -91,9 +120,46 @@ fn run() -> Result<(), Error> {
                     }, &Default::default(), context.transform, g2d);
             });
         });
+
+        if let Some(Button::Keyboard(key)) = event.press_args() {
+            gui_state = gui_state.process_key(key, &mut game);
+        }
     }
 
     Ok(())
+}
+
+enum GuiState {
+    Init(GameState),
+    Solving(GameState),
+}
+
+impl GuiState {
+    fn console(&self) -> String {
+        match self {
+            &GuiState::Init(..) =>
+                "Map loaded. Press <s> to solve.".to_string(),
+            &GuiState::Solving(..) =>
+                "Solving...".to_string(),
+        }
+    }
+
+    fn get_state(&self) -> &GameState {
+        match self {
+            &GuiState::Init(ref s) => s,
+            &GuiState::Solving(ref s) => s,
+        }
+    }
+
+    fn process_key(self, key: Key, game: &mut Game) -> GuiState {
+        match (self, key) {
+            (GuiState::Init(state), Key::S) => {
+                GuiState::Solving(state)
+            },
+            (other, _) =>
+                other,
+        }
+    }
 }
 
 enum Sprite<'a> {
@@ -119,13 +185,13 @@ fn translate_tile_coords(viewport: &Option<Viewport>, room: &Room, &(row, cell):
         .map(|v| (v.draw_size[0], v.draw_size[1]))
         .unwrap_or((640, 480));
     let tile_width = w as f64 / room.width as f64;
-    let tile_height = h as f64 / room.height as f64;
+    let tile_height = (h as f64 - CONSOLE_HEIGHT) / room.height as f64;
     let tile_side = if tile_width < tile_height {
         tile_width
     } else {
         tile_height
     };
-    [cell as f64 * tile_side, row as f64 * tile_side, tile_side, tile_side]
+    [cell as f64 * tile_side, row as f64 * tile_side + CONSOLE_HEIGHT, tile_side, tile_side]
 }
 
 struct SokobanTextures {
