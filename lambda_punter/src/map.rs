@@ -15,6 +15,6 @@ pub struct Site {
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct River {
-    source: SiteId,
-    target: SiteId,
+    pub source: SiteId,
+    pub target: SiteId,
 }
