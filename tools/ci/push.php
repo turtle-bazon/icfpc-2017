@@ -45,7 +45,7 @@ foreach($changes as $change) {
   if (count($refMessageLines) > 1) {
     $refTitle = $refMessageLines[0];
   }
-  $refAuthor = $refTarget['author'];
+  $refAuthor = $refTarget['author']['display_name'];
 
   echo "Processing '{$newRefName}': HEAD is '{$refHead}'\n";
   echo $refMessage . "\n";
