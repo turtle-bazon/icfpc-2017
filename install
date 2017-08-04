@@ -1,5 +1,6 @@
 #!/bin/bash
 
+touch $HOME/.cargo/config
 cp $HOME/.cargo/config $HOME/.cargo/config~
 
 cat >> $HOME/.cargo/config <<EOF
@@ -10,7 +11,7 @@ registry = 'https://github.com/rust-lang/crates.io-index'
 replace-with = 'vendored-sources'
 
 [source.vendored-sources]
-directory = '/home/sectoid/prj/icfpc/2017/repo/lambda_punter/vendor'
+directory = '$PWD/lambda_punter/vendor'
 EOF
 
 cd lambda_punter/
@@ -19,7 +20,7 @@ cargo build
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
     echo "Build failed: $RETVAL"
-    mv $HOME/.cargo/config~ $HOME/.cargo/config
+    mv -f $HOME/.cargo/config~ $HOME/.cargo/config
     exit $RETVAL
 fi
 
@@ -27,10 +28,10 @@ cargo test
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
     echo "Test failed: $RETVAL"
-    mv $HOME/.cargo/config~ $HOME/.cargo/config
+    mv -f $HOME/.cargo/config~ $HOME/.cargo/config
     exit $RETVAL
 fi
 
-mv $HOME/.cargo/config~ $HOME/.cargo/config 
+mv -f $HOME/.cargo/config~ $HOME/.cargo/config
 
 exit 0
