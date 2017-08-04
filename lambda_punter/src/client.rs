@@ -71,7 +71,9 @@ pub fn run_offline<GB>(name: &str, gs_builder: GB) -> Result<Option<(Vec<Score>,
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             let s = io::stdout();
             let mut l = s.lock();
-            l.write(buf)
+            let b = l.write(buf)?;
+            l.flush()?;
+            Ok(b)
         }
 
         fn flush(&mut self) -> io::Result<()> {
