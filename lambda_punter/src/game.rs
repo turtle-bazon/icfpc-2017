@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use super::types::PunterId;
 use super::proto::{Move, Setup};
 
@@ -7,7 +8,7 @@ pub trait GameStateBuilder {
     fn build(self, setup: Setup) -> Self::GameState;
 }
 
-pub trait GameState: Sized {
+pub trait GameState: Sized + DeserializeOwned {
     type Error;
 
     fn play(self, moves: Vec<Move>) -> Result<(Move, Self), Self::Error>;

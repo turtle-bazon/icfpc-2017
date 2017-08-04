@@ -40,8 +40,7 @@ impl GameStateBuilder for NearestGameStateBuilder {
     }
 }
 
-
-#[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 pub struct NearestGameState {
     punter: PunterId,
     punters_count: usize,

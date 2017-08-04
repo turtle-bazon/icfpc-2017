@@ -14,7 +14,7 @@ impl GameStateBuilder for AlwaysPassGameStateBuilder {
     }
 }
 
-#[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 pub struct AlwaysPassGameState {
     punter: PunterId,
 }

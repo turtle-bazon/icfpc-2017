@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde_json::value::Value;
 use serde_json;
 
@@ -24,20 +25,20 @@ pub enum Rep {
     },
 }
 
-#[derive(PartialEq, Debug,Deserialize)]
+#[derive(PartialEq, Debug, Deserialize)]
 pub struct Setup {
     pub punter: PunterId,
     pub punters: usize,
     pub map: Map,
 }
 
-#[derive(Debug,PartialEq,Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Move {
     Claim { punter: PunterId, source: SiteId, target: SiteId, },
     Pass { punter: PunterId, },
 }
 
-#[derive(Debug,PartialEq,Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Score {
     pub punter: PunterId,
     pub score: usize,
@@ -47,7 +48,6 @@ pub struct Score {
 pub enum Error {
     Json(serde_json::Error),
     UnexpectedJson,
-
 }
 
 
@@ -75,23 +75,43 @@ struct ServerMap {
 }
 
 impl Rep {
-    pub fn from_json(s: &str) -> Result<Rep,Error> {
+    pub fn from_json<S>(s: &str) -> Result<(Rep, Option<S>), Error> where S: DeserializeOwned {
         match serde_json::from_str::<Value>(s).map_err(Error::Json)? {
             Value::Object(mut map) => {
                 if map.contains_key("move") {
-                    let smove = serde_json::from_value::<ServerMoves>(map.remove("move").unwrap()).map_err(Error::Json)?;
-                    Ok(Rep::Move {
+                    let mut move_node = map.remove("move").unwrap();
+                    let maybe_state = if let Value::Object(ref mut obj) = move_node {
+                        if let Some(value) = obj.remove("state") {
+                            Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let smove = serde_json::from_value::<ServerMoves>(move_node).map_err(Error::Json)?;
+                    Ok((Rep::Move {
                         moves: smove.moves.into_iter().map(|m| {
                             match m {
                                 ServerMove::claim { punter, source, target } => Move::Claim { punter: punter, source: source, target: target},
                                 ServerMove::pass { punter } => Move::Pass { punter: punter },
                             }
                         }).collect(),
-                    })
+                    }, maybe_state))
                 }
                 else if map.contains_key("stop") {
-                    let stop=serde_json::from_value::<ServerStop>(map.remove("stop").unwrap()).map_err(Error::Json)?;
-                    Ok(Rep::Stop {
+                    let mut stop_node = map.remove("stop").unwrap();
+                    let maybe_state = if let Value::Object(ref mut obj) = stop_node {
+                        if let Some(value) = obj.remove("state") {
+                            Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let stop = serde_json::from_value::<ServerStop>(stop_node).map_err(Error::Json)?;
+                    Ok((Rep::Stop {
                         moves: stop.moves.into_iter().map(|m| {
                             match m {
                                 ServerMove::claim { punter, source, target } => Move::Claim { punter: punter, source: source, target: target},
@@ -99,11 +119,11 @@ impl Rep {
                             }
                         }).collect(),
                         scores: stop.scores,
-                    })
+                    }, maybe_state))
                 }
                 else if map.contains_key("punter") && map.contains_key("punters") && map.contains_key("map") {
                     let smap = serde_json::from_value::<ServerMap>(map.remove("map").unwrap()).map_err(Error::Json)?;
-                    Ok(Rep::Setup(Setup{
+                    Ok((Rep::Setup(Setup{
                         punter: serde_json::from_value::<PunterId>(map.remove("punter").unwrap()).map_err(Error::Json)?,
                         punters: serde_json::from_value::<usize>(map.remove("punters").unwrap()).map_err(Error::Json)?,
                         map: Map {
@@ -111,15 +131,15 @@ impl Rep {
                             rivers: smap.rivers.into_iter().collect(),
                             mines: smap.mines.into_iter().collect(),
                         }
-                    }))
+                    }), None))
                 }
                 else if map.contains_key("timeout") {
-                    Ok(Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?))
+                    Ok((Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?), None))
                 }
                 else if map.contains_key("you") {
-                    Ok(Rep::Handshake {
+                    Ok((Rep::Handshake {
                         name: serde_json::from_value::<String>(map.remove("you").unwrap()).map_err(Error::Json)?,
-                    })
+                    }, None))
                 } else {
                     Err(Error::UnexpectedJson)
                 }
@@ -284,4 +304,3 @@ mod test {
     }
 
 }
-

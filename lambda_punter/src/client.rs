@@ -32,6 +32,7 @@ pub enum RecvError {
     TcpReadPacketNotEnough { want_bytes: usize, received_bytes: usize, },
     TcpPacketString(str::Utf8Error),
     PacketDecode(proto::Error),
+    UnexpectedStateArrived,
 }
 
 pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Score>, GB::GameState), Error<<GB::GameState as GameState>::Error>>
@@ -90,9 +91,13 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
                     let packet_str = str::from_utf8(&packet)
                         .map_err(RecvError::TcpPacketString)?;
                     debug!("S -> P | {}:{}", len, packet_str);
-                    let rep = Rep::from_json(&packet_str)
+                    let (rep, maybe_state) = Rep::from_json::<GB::GameState>(&packet_str)
                         .map_err(RecvError::PacketDecode)?;
-                    Ok(rep)
+                    if maybe_state.is_some() {
+                        Err(RecvError::UnexpectedStateArrived)
+                    } else {
+                        Ok(rep)
+                    }
                 }
             }
         },
