@@ -44,8 +44,8 @@ foreach($changes as $change) {
   $cmdOut = []; $cmdRet = 0;
   $last = exec($cmd, $cmdOut, $cmdRet);
   $fullLog = implode("\n", $cmdOut);
-  echo $fullLog;
-  // TODO: Save build log
+  echo $fullLog; echo "\n";
+  saveBuildLog($refHead, $fullLog);
   $buildResult = ($cmdRet == 0);
   echo "BUILD " . ($buildResult ? "OK" : "FAIL") . "\n";
   // TODO: Broadcast to Telegram
