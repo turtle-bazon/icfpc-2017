@@ -1,6 +1,6 @@
 [package]
 name = "sokoban"
-version = "0.3.14"
+version = "0.3.17"
 authors = ["Azamat S. Kalimoulline <turtle@bazon.ru>",
            "Alexey V. Voznyuk <me@swizard.info>"]
 

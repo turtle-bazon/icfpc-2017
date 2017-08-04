@@ -91,6 +91,9 @@ pub mod a_star {
                 if visited.contains(&trans_state.placement) || trans_state.has_blocked_crate() {
                     continue;
                 }
+                if has_bad_dst_position(&trans_state, &mut rtc_trans, &mut rtc_visited) {
+                    continue;
+                }
                 let mut next_path = path.clone();
                 next_path.push((move_, trans_state.clone()));
                 pq.push(Node::new(trans_state, next_path, &mut rtc_trans, &mut rtc_visited));
@@ -169,5 +172,58 @@ pub mod a_star {
             }
         }
         reachable
+    }
+
+    fn has_bad_dst_position(state: &GameState, rtc_trans: &mut Vec<Coords>, rtc_visited: &mut HashSet<Coords>) -> bool {
+        for coord in state.placement.crates.iter() {
+            if let Some(&Tile::CrateDst) = state.room_at(coord) {
+                if state.crate_is_blocked(coord) {
+                    if crate_blocks_another_dst(state, coord, rtc_trans, rtc_visited) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn crate_blocks_another_dst(state: &GameState, crate_: &Coords, rtc_trans: &mut Vec<Coords>, rtc_visited: &mut HashSet<Coords>) -> bool {
+        state.room
+            .crates_dsts
+            .iter()
+            .filter(|&&dc| !state.placement.crates.iter().any(|&c| c == dc))
+            .any(|coord| crate_blocks_dst(state, crate_, coord, rtc_trans, rtc_visited))
+    }
+
+    fn crate_blocks_dst(state: &GameState, crate_: &Coords, dst: &Coords, rtc_trans: &mut Vec<Coords>, rtc_visited: &mut HashSet<Coords>) -> bool {
+        rtc_visited.clear();
+        rtc_trans.clear();
+        rtc_trans.push(*dst);
+        while let Some(coord) = rtc_trans.pop() {
+            for cc in state.placement.crates.iter().filter(|&c| c == &coord) {
+                if let Some(&Tile::Floor) = state.room_at(cc) {
+                    return false;
+                }
+            }
+            rtc_visited.insert(coord);
+            for &(dr, dc) in [(-1, 0), (0, 1), (1, 0), (0, -1)].iter() {
+                let trans_coord = (coord.0 + dr, coord.1 + dc);
+                if rtc_visited.contains(&trans_coord) {
+                    continue;
+                }
+                match state.room_at(&trans_coord) {
+                    Some(&Tile::Floor) =>
+                        (),
+                    Some(&Tile::CrateDst) if (crate_.0 - trans_coord.0).abs() + (crate_.1 - trans_coord.1).abs() == 1 =>
+                        continue,
+                    Some(&Tile::CrateDst) =>
+                        (),
+                    _ =>
+                        continue,
+                }
+                rtc_trans.push(trans_coord);
+            }
+        }
+        true
     }
 }

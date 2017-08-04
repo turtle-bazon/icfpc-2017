@@ -140,22 +140,24 @@ impl GameState {
             if let Some(&Tile::CrateDst) = self.room_at(coord) {
                 continue;
             }
-            let blocked = |c| if let Some(&Tile::Wall) = self.room_at(&c) {
-                true
-            } else {
-                self.placement.crates.iter().any(|&cc| cc == c)
-            };
-            if (blocked((coord.0 - 1, coord.1)) && blocked((coord.0, coord.1 + 1)))
-                || (blocked((coord.0, coord.1 + 1)) && blocked((coord.0 + 1, coord.1)))
-                || (blocked((coord.0 + 1, coord.1)) && blocked((coord.0, coord.1 - 1)))
-                || (blocked((coord.0, coord.1 - 1)) && blocked((coord.0 - 1, coord.1)))
-            {
+            if self.crate_is_blocked(&coord) {
                 return true;
             }
         }
         false
     }
 
+    pub fn crate_is_blocked(&self, coord: &Coords) -> bool {
+        let blocked = |c| if let Some(&Tile::Wall) = self.room_at(&c) {
+            true
+        } else {
+            self.placement.crates.iter().any(|&cc| cc == c)
+        };
+        (blocked((coord.0 - 1, coord.1)) && blocked((coord.0, coord.1 + 1)))
+            || (blocked((coord.0, coord.1 + 1)) && blocked((coord.0 + 1, coord.1)))
+            || (blocked((coord.0 + 1, coord.1)) && blocked((coord.0, coord.1 - 1)))
+            || (blocked((coord.0, coord.1 - 1)) && blocked((coord.0 - 1, coord.1)))
+    }
 }
 
 pub struct Transitions<'a, 'b> {
