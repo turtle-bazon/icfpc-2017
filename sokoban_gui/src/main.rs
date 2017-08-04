@@ -140,6 +140,7 @@ struct DebugStep {
     moves: Vec<Move>,
     state: GameState,
     finished: bool,
+    reachable_tiles_count: usize,
     crates_on_dst_count: usize,
     nearest_crate_nearest_dst_sq_dist: usize,
     nearest_crate_sq_dist: usize,
@@ -192,8 +193,9 @@ impl GuiState {
                 format!("Solution found: step {} of {}. Press <N> for next step or <P> for previous.",
                         step + 1, solution.len()),
             &GuiState::DebugSolve { ref mode, ref step, .. } =>
-                format!("Inspecting state: finished: {}, cod/ncnd/nc: {}/{}/{}.{} Path so far: {:?}",
+                format!("Inspecting state: finished: {}, rtc/cod/ncnd/nc: {}/{}/{}/{}.{} Path so far: {:?}",
                         step.finished,
+                        step.reachable_tiles_count,
                         step.crates_on_dst_count,
                         step.nearest_crate_nearest_dst_sq_dist,
                         step.nearest_crate_sq_dist,
@@ -240,11 +242,12 @@ impl GuiState {
                 let handle = thread::Builder::new()
                     .name("debug solver background thread".to_string())
                     .spawn(move || {
-                        let solution = solver::a_star::solve_debug(&mut game, init_state, |moves, st, finished, cod, ncnd, nc| {
+                        let solution = solver::a_star::solve_debug(&mut game, init_state, |moves, st, finished, rtc, cod, ncnd, nc| {
                             slave_tx.send(DebugPacket::Step(DebugStep {
                                 moves: moves.iter().map(|v| v.0).collect(),
                                 state: st.clone(),
                                 finished: finished,
+                                reachable_tiles_count: rtc,
                                 crates_on_dst_count: cod,
                                 nearest_crate_nearest_dst_sq_dist: ncnd,
                                 nearest_crate_sq_dist: nc,
@@ -260,6 +263,7 @@ impl GuiState {
                         moves: vec![],
                         state: state,
                         finished: false,
+                        reachable_tiles_count: 0,
                         crates_on_dst_count: 0,
                         nearest_crate_nearest_dst_sq_dist: 0,
                         nearest_crate_sq_dist: 0,
