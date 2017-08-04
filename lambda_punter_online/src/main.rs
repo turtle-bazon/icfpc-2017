@@ -5,6 +5,7 @@ extern crate lambda_punter;
 
 use std::process;
 use clap::Arg;
+use lambda_punter::{client, game};
 
 fn main() {
     env_logger::init().unwrap();
@@ -21,6 +22,8 @@ fn main() {
 #[derive(Debug)]
 enum Error {
     MissingParameter(&'static str),
+    InvalidServerPort(clap::Error),
+    LambdaPunter(client::Error<()>),
 }
 
 fn run() -> Result<(), Error> {
@@ -41,12 +44,26 @@ fn run() -> Result<(), Error> {
              .help("server tcp connect port")
              .default_value("9001")
              .takes_value(true))
+        .arg(Arg::with_name("hello-name")
+             .display_order(3)
+             .short("n")
+             .long("hello-name")
+             .value_name("NAME")
+             .help("welcome name for Handshake packet")
+             .default_value("skobochka")
+             .takes_value(true))
         .get_matches();
 
     let server_host = matches.value_of("server-host")
         .ok_or(Error::MissingParameter("server-host"))?;
-    let server_port = matches.value_of("server-port")
-        .ok_or(Error::MissingParameter("server-port"))?;
+    let server_port = value_t!(matches, "server-port", u16)
+        .map_err(Error::InvalidServerPort)?;
+    let hello_name = matches.value_of("hello-name")
+        .ok_or(Error::MissingParameter("hello-name"))?;
 
+    let (scores, _game_state) = client::run_network((server_host, server_port), hello_name, game::SimpleGameStateBuilder)
+        .map_err(Error::LambdaPunter)?;
+
+    println!("All done! Score {:?}", scores);
     Ok(())
 }
