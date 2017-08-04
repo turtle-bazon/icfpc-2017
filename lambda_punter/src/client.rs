@@ -48,6 +48,43 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
         .map_err(Error::Chat)
 }
 
+pub fn run_offline<GB>(name: &str, gs_builder: GB) -> Result<Option<(Vec<Score>, GB::GameState)>, Error<<GB::GameState as GameState>::Error>>
+    where GB: GameStateBuilder,
+{
+    struct Stdio;
+
+    impl Read for Stdio {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let s = io::stdin();
+            let mut l = s.lock();
+            l.read(buf)
+        }
+
+        fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+            let s = io::stdin();
+            let mut l = s.lock();
+            l.read_to_end(buf)
+        }
+    }
+
+    impl Write for Stdio {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let s = io::stdout();
+            let mut l = s.lock();
+            l.write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            let s = io::stdout();
+            let mut l = s.lock();
+            l.flush()
+        }
+    }
+
+    chat::run_offline(name, Stdio, generic_write, generic_read, gs_builder)
+        .map_err(Error::Chat)
+}
+
 fn generic_write<W, S>(writer: &mut W, req: Req, maybe_state: Option<S>) -> Result<(), SendError>
     where W: Write, S: Serialize
 {
