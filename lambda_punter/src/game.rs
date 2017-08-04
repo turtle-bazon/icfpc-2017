@@ -4,44 +4,42 @@ use super::types::{PunterId, SiteId};
 use super::map::Map;
 use super::proto::{Move, Setup};
 
-#[allow(dead_code)]
-pub struct GameState {
-    pub punter: PunterId,
-    punters_count: usize,
-    map: Map,
-    moves: HashMap<PunterId, Vec<Move>>,
+pub trait GameStateBuilder {
+    type GameState: GameState;
+
+    fn build(&self, setup: Setup) -> Self::GameState;
 }
 
-impl GameState {
-    pub fn new(setup: Setup) -> GameState {
-        GameState {
+pub trait GameState {
+    fn play(self, moves: Vec<Move>) -> (Move, Self);
+    fn get_punter(&self) -> PunterId;
+}
+
+pub struct SimpleGameStateBuilder;
+
+impl GameStateBuilder for SimpleGameStateBuilder {
+    type GameState = SimpleGameState;
+
+    fn build(&self, setup: Setup) -> Self::GameState {
+        SimpleGameState {
             punter: setup.punter,
             punters_count: setup.punters,
             map: setup.map,
             moves: HashMap::new(),
         }
     }
+}
 
-    pub fn score_for(mut self, punter: PunterId) -> u64 {
-        let is_path_reachable = |site1: SiteId, site2: SiteId| true;
-        let shortest_path = |site1: SiteId, site2: SiteId| 1;
-        let score_from_mine_to_site = |mine: SiteId, site: SiteId| {
-            if is_path_reachable(mine, site) {
-                let path_rang = shortest_path(mine, site);
+#[allow(dead_code)]
+pub struct SimpleGameState {
+    punter: PunterId,
+    punters_count: usize,
+    map: Map,
+    moves: HashMap<PunterId, Vec<Move>>,
+}
 
-                path_rang * path_rang
-            } else {
-                0
-            }
-        };
-        let score_from_mine = |mine| 1;
-        self.map.mines
-            .iter()
-            .map(score_from_mine)
-            .sum()
-    }
-
-    pub fn play(mut self, moves: Vec<Move>) -> (Move, GameState) {
+impl GameState for SimpleGameState {
+    fn play(mut self, moves: Vec<Move>) -> (Move, SimpleGameState) {
         for mv in moves {
             let punter = match mv {
                 Move::Claim { punter, .. } => punter,
@@ -54,5 +52,30 @@ impl GameState {
         }
 
         (Move::Pass { punter: self.punter, }, self)
+    }
+
+    fn get_punter(&self) -> PunterId {
+        self.punter
+    }
+}
+
+impl SimpleGameState {
+    pub fn score_for(&self, _punter: PunterId) -> u64 {
+        let is_path_reachable = |_site1: SiteId, _site2: SiteId| true;
+        let shortest_path = |_site1: SiteId, _site2: SiteId| 1;
+        let _score_from_mine_to_site = |mine: SiteId, site: SiteId| {
+            if is_path_reachable(mine, site) {
+                let path_rang = shortest_path(mine, site);
+
+                path_rang * path_rang
+            } else {
+                0
+            }
+        };
+        let score_from_mine = |_mine| 1;
+        self.map.mines
+            .iter()
+            .map(score_from_mine)
+            .sum()
     }
 }
