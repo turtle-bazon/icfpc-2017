@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use super::types::SiteId;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Default, Debug)]
 pub struct Map {
     pub sites: HashMap<SiteId, Site>,
     pub rivers: HashSet<River>,
@@ -15,6 +15,6 @@ pub struct Site {
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct River {
-    source: SiteId,
-    target: SiteId,
+    pub source: SiteId,
+    pub target: SiteId,
 }
