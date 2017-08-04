@@ -16,6 +16,8 @@ if (!isset($body['changes'])) {
 }
 
 $changes = $body['changes'];
+echo "Callback has " . count($changes) . " changes\n";
+
 foreach($changes as $change) {
   if (!isset($change['new'])) {
     continue;
@@ -37,8 +39,17 @@ foreach($changes as $change) {
 
   $refTarget = $newRef['target'];
   $refHead = $refTarget['hash'];
+  $refMessage = $refTarget['message'];
+  $refMessageLines = explode("\n", $refMessage);
+  $refTitle = $refMessage;
+  if (count($refMessageLines) > 1) {
+    $refTitle = $refMessageLines[0];
+  }
+  $refAuthor = $refTarget['author']['display_name'];
 
   echo "Processing '{$newRefName}': HEAD is '{$refHead}'\n";
+  echo $refMessage . "\n";
+  echo $refAuthor . "\n";
 
   $cmd = "./build.sh '{$repoUrl}' '{$refHead}'";
   echo "Attempting to exec '{$cmd}'... \n";
@@ -54,7 +65,7 @@ foreach($changes as $change) {
   $summary = "BUILD " . ($buildResult ? "OK" : "FAIL");
   echo $summary . "\n";
 
-  $statusMessage = "{$summary}\n{$newRefName} @ {$refHead}.\nDetails: https://icfpc.gnoll.tech/" . $logPath;
+  $statusMessage = "{$summary}\n{$refTitle} - {$refAuthor}\n{$newRefName} @ {$refHead}.\nDetails: https://icfpc.gnoll.tech/" . $logPath;
 
   try {
     // Create Telegram API object
