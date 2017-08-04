@@ -9,3 +9,4 @@ pub mod map;
 pub mod proto;
 pub mod game;
 pub mod chat;
+pub mod client;
