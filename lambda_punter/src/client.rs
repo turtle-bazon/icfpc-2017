@@ -16,6 +16,7 @@ pub enum Error<GE> {
 #[derive(Debug)]
 pub enum SendError {
     TcpWrite(io::Error),
+    PacketEncode(proto::Error),
 }
 
 #[derive(Debug)]
@@ -43,7 +44,8 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
         name,
         tcp,
         move |tcp, req| {
-            let encoded_req = format!("{:?}", req);
+            let encoded_req = req.to_json()
+                .map_err(SendError::PacketEncode)?;
             tcp.write_all(encoded_req.as_bytes())
                 .map_err(SendError::TcpWrite)
         },
