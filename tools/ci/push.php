@@ -43,6 +43,9 @@ foreach($changes as $change) {
   echo "Attempting to exec '{$cmd}'... \n";
   $cmdOut = []; $cmdRet = 0;
   $last = exec($cmd, $cmdOut, $cmdRet);
+  /* Dirty hack */
+  unset($cmdOut[0]); unset($cmdOut[1]);
+
   $fullLog = implode("\n", $cmdOut);
   echo $fullLog; echo "\n";
   saveBuildLog($refHead, $fullLog);
