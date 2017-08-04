@@ -3,4 +3,6 @@
 final class Config {
   static public $REPO_URL = 'git@bitbucket.org:skobochka/icfpc-2017.git';
   static public $TRACK_BRANCHES = ['master', 'submission'];
+  static public $TELEGRAM_API_KEY = '';
+  static public $TELEGRAM_ROOMS = [];
 }

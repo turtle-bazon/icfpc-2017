@@ -1,6 +1,7 @@
 <?php
 
 require_once ('common.php');
+require_once ('vendor/autoload.php');
 
 $repoUrl = Config::$REPO_URL;
 
@@ -48,8 +49,24 @@ foreach($changes as $change) {
 
   $fullLog = implode("\n", $cmdOut);
   echo $fullLog; echo "\n";
-  saveBuildLog($refHead, $fullLog);
+  $logPath = saveBuildLog($refHead, $fullLog);
   $buildResult = ($cmdRet == 0);
-  echo "BUILD " . ($buildResult ? "OK" : "FAIL") . "\n";
-  // TODO: Broadcast to Telegram
+  $summary = "BUILD " . ($buildResult ? "OK" : "FAIL");
+  echo $summary . "\n";
+
+  $statusMessage = "{$newRefName} @ {$refHead}: {$summary}. Details: https://icfpc.gnoll.tech/" . $logPath;
+
+  try {
+    // Create Telegram API object
+    $telegram = new Longman\TelegramBot\Telegram(Config::$TELEGRAM_API_KEY, 'skobochka_bot');
+
+    foreach (Config::$TELEGRAM_ROOMS as $room) {
+      Longman\TelegramBot\Request::sendMessage(['chat_id' => $room, 'text' => $statusMessage]);
+    }
+
+  } catch (Longman\TelegramBot\Exception\TelegramException $e) {
+    // Silence is golden!
+    // log telegram errors
+    // echo $e;
+  }
 }
