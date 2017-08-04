@@ -4,8 +4,8 @@ extern crate lambda_punter;
 #[macro_use] extern crate clap;
 
 use std::process;
-use clap::Arg;
-use lambda_punter::{client, game};
+use clap::{Arg, AppSettings, SubCommand};
+use lambda_punter::{client, game, solvers};
 
 fn main() {
     env_logger::init().unwrap();
@@ -23,11 +23,14 @@ fn main() {
 enum Error {
     MissingParameter(&'static str),
     InvalidServerPort(clap::Error),
-    LambdaPunter(client::Error<()>),
+    NoSubcommandProvided,
+    AlwaysPassSolver(client::Error<()>),
+    NearestSolver(client::Error<()>),
 }
 
 fn run() -> Result<(), Error> {
     let matches = app_from_crate!()
+        .setting(AppSettings::SubcommandRequired)
         .arg(Arg::with_name("server-host")
              .display_order(1)
              .short("h")
@@ -52,6 +55,12 @@ fn run() -> Result<(), Error> {
              .help("welcome name for Handshake packet")
              .default_value("skobochka")
              .takes_value(true))
+        .subcommand(SubCommand::with_name("always_pass")
+                    .display_order(1)
+                    .about("solvers::always_pass"))
+        .subcommand(SubCommand::with_name("nearest")
+                    .display_order(2)
+                    .about("solvers::nearest"))
         .get_matches();
 
     let server_host = matches.value_of("server-host")
@@ -61,9 +70,36 @@ fn run() -> Result<(), Error> {
     let hello_name = matches.value_of("hello-name")
         .ok_or(Error::MissingParameter("hello-name"))?;
 
-    let (scores, _game_state) = client::run_network((server_host, server_port), hello_name, game::SimpleGameStateBuilder)
-        .map_err(Error::LambdaPunter)?;
+    info!("connecting to {}:{} as [ {} ]", server_host, server_port, hello_name);
+    if let Some(..) = matches.subcommand_matches("always_pass") {
+        debug!("using solvers::always_pass");
+        proceed_with_solver(server_host, server_port, hello_name, solvers::always_pass::AlwaysPassGameStateBuilder, Error::AlwaysPassSolver)
+    } else if let Some(..) = matches.subcommand_matches("nearest") {
+        debug!("using solvers::nearest");
+        proceed_with_solver(server_host, server_port, hello_name, solvers::nearest::NearestGameStateBuilder, Error::NearestSolver)
+    } else {
+        Err(Error::NoSubcommandProvided)
+    }
+}
 
-    println!("All done! Score {:?}", scores);
+fn proceed_with_solver<GB, EF>(
+    server_host: &str,
+    server_port: u16,
+    hello_name: &str,
+    gs_builder: GB,
+    err_map: EF)
+    -> Result<(), Error>
+    where GB: game::GameStateBuilder,
+          EF: Fn(client::Error<<GB::GameState as game::GameState>::Error>) -> Error
+{
+    let (scores, _game_state) = client::run_network((server_host, server_port), hello_name, gs_builder)
+        .map_err(err_map)?;
+    info!("all done");
+
+    println!("Game over! Total server scores:");
+    for score in scores {
+        println!("  Punter: {}, score: {}", score.punter, score.score);
+    }
+
     Ok(())
 }
