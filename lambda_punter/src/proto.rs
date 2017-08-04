@@ -12,16 +12,19 @@ pub enum Req {
 #[derive(Debug)]
 pub enum Rep {
     Handshake { name: String, },
-    Setup {
-        punter: PunterId,
-        punters: usize,
-        map: Map,
-    },
+    Setup(Setup),
     Move { moves: Vec<Move>, },
     Stop {
         moves: Vec<Move>,
         scores: Vec<Score>,
     },
+}
+
+#[derive(Debug)]
+pub struct Setup {
+    pub punter: PunterId,
+    pub punters: usize,
+    pub map: Map,
 }
 
 #[derive(Debug)]
