@@ -22,45 +22,45 @@ pub fn run_online<S, FS, SR, FR, RR, GB>(
     mut recv_fn: FR,
     gs_builder: GB)
     -> Result<(Vec<Score>, GB::GameState), Error<SR, RR, <GB::GameState as GameState>::Error>>
-    where FS: FnMut(&mut S, Req) -> Result<(), SR>,
-          FR: FnMut(&mut S) -> Result<Rep, RR>,
+    where FS: FnMut(&mut S, Req, Option<GB::GameState>) -> Result<(), SR>,
+          FR: FnMut(&mut S) -> Result<(Rep, Option<GB::GameState>), RR>,
           GB: GameStateBuilder
 {
     // P → S {"me" : name}
-    send_fn(&mut fn_state, Req::Handshake { name: name.to_string(), })
+    send_fn(&mut fn_state, Req::Handshake { name: name.to_string(), }, None)
         .map_err(Error::Send)?;
     // S → P {"you" : name}
     match recv_fn(&mut fn_state).map_err(Error::Recv)? {
-        Rep::Handshake { name: ref rep_name, } if rep_name == name =>
+        (Rep::Handshake { name: ref rep_name, }, _) if rep_name == name =>
             (),
-        other =>
+        (other, _) =>
             return Err(Error::UnexpectedHandshakeRep(other)),
     }
     // S → P {"punter" : p, "punters" : n, "map" : map}
     let mut game_state =
         match recv_fn(&mut fn_state).map_err(Error::Recv)? {
-            Rep::Setup(setup) =>
+            (Rep::Setup(setup), _) =>
                 gs_builder.build(setup),
-            other =>
+            (other, _) =>
                 return Err(Error::UnexpectedSetupRep(other)),
         };
     // P → S {"ready" : p}
-    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), })
+    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), }, None)
         .map_err(Error::Send)?;
     // gameplay
     loop {
         // S → P {"move" : {"moves" : moves}}
         // S → P {"stop" : {"moves" : moves,"scores" : scores}}
         match recv_fn(&mut fn_state).map_err(Error::Recv)? {
-            Rep::Move { moves, } => {
+            (Rep::Move { moves, }, _) => {
                 let (move_, next_game_state) = game_state.play(moves)
                     .map_err(Error::GameState)?;
                 game_state = next_game_state;
-                send_fn(&mut fn_state, Req::Move(move_)).map_err(Error::Send)?;
+                send_fn(&mut fn_state, Req::Move(move_), None).map_err(Error::Send)?;
             },
-            Rep::Stop { scores, moves, } =>
+            (Rep::Stop { scores, moves, }, _) =>
                 return Ok((scores, game_state.stop(moves).map_err(Error::GameState)?)),
-            other =>
+            (other, _) =>
                 return Err(Error::UnexpectedMoveRep(other)),
         }
 
@@ -136,8 +136,8 @@ mod test {
             run_online(
                 "alice",
                 (),
-                |_, _req| Ok::<_, ()>(()),
-                |_| Ok::<_, ()>(Rep::Handshake { name: "bob".to_string(), }),
+                |_, _req, _| Ok::<_, ()>(()),
+                |_| Ok::<_, ()>((Rep::Handshake { name: "bob".to_string(), }, None)),
                 AlwaysPassGameStateBuilder)
                 .map(|v| v.0),
             Err(Error::UnexpectedHandshakeRep(Rep::Handshake { name: "bob".to_string(), })));
@@ -307,6 +307,7 @@ mod test {
         #[derive(PartialEq, Debug)]
         struct RepsStackIsEmpty;
 
+        #[derive(Serialize, Deserialize)]
         struct ScriptGameState {
             punter: PunterId,
             script: Vec<Move>,
@@ -351,7 +352,7 @@ mod test {
         let (final_score, final_state) = run_online(
             name,
             (),
-            |_, req| if let Some(expected_req) = reqs.pop() {
+            |_, req, _| if let Some(expected_req) = reqs.pop() {
                 if expected_req == req {
                     Ok(())
                 } else {
@@ -361,7 +362,7 @@ mod test {
                 Err(Unexpected { expected: None, provided: req, })
             },
             |_| if let Some(rep) = reps.pop() {
-                Ok(rep)
+                Ok((rep, None))
             } else {
                 Err(RepsStackIsEmpty)
             },
