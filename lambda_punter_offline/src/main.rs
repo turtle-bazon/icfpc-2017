@@ -73,9 +73,9 @@ fn proceed_with_solver<GB, EF>(
     info!("all done");
 
     if let Some((scores, _game_state)) = maybe_results {
-        println!("Game over! Total server scores:");
+        info!("Game over! Total server scores:");
         for score in scores {
-            println!("  Punter: {}, score: {}", score.punter, score.score);
+            info!("  Punter: {}, score: {}", score.punter, score.score);
         }
     }
 
