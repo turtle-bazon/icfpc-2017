@@ -134,6 +134,28 @@ impl GameState {
             counter: 0,
         }
     }
+
+    pub fn has_blocked_crate(&self) -> bool {
+        for coord in self.placement.crates.iter() {
+            if let Some(&Tile::CrateDst) = self.room_at(coord) {
+                continue;
+            }
+            let blocked = |c| if let Some(&Tile::Wall) = self.room_at(&c) {
+                true
+            } else {
+                self.placement.crates.iter().any(|&cc| cc == c)
+            };
+            if (blocked((coord.0 - 1, coord.1)) && blocked((coord.0, coord.1 + 1)))
+                || (blocked((coord.0, coord.1 + 1)) && blocked((coord.0 + 1, coord.1)))
+                || (blocked((coord.0 + 1, coord.1)) && blocked((coord.0, coord.1 - 1)))
+                || (blocked((coord.0, coord.1 - 1)) && blocked((coord.0 - 1, coord.1)))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
 }
 
 pub struct Transitions<'a, 'b> {
@@ -383,5 +405,22 @@ mod test {
     fn one_step(room_txt: &'static str) -> (Move, GameState) {
         let (mut game, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
         init_state.transitions(&mut game).next().unwrap()
+    }
+
+    #[test]
+    fn blocked_crates() {
+        assert!(room_state("####\n#+I@").has_blocked_crate());
+        assert!(room_state("####\n@I+#").has_blocked_crate());
+        assert!(room_state("#+I@\n####").has_blocked_crate());
+        assert!(room_state("@I+#\n####").has_blocked_crate());
+        assert!(room_state("###@\n++I@").has_blocked_crate());
+        assert!(room_state("###@\n@I++").has_blocked_crate());
+        assert!(room_state("++I@\n###@").has_blocked_crate());
+        assert!(room_state("@I++\n###@").has_blocked_crate());
+    }
+
+    fn room_state(room_txt: &'static str) -> GameState {
+        let (_, init_state) = parser::parse(room_txt.as_bytes()).unwrap();
+        init_state
     }
 }

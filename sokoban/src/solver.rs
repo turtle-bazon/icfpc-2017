@@ -88,7 +88,7 @@ pub mod a_star {
             visited.insert(state.placement.clone());
 
             for (move_, trans_state) in state.transitions(game) {
-                if visited.contains(&trans_state.placement) {
+                if visited.contains(&trans_state.placement) || trans_state.has_blocked_crate() {
                     continue;
                 }
                 let mut next_path = path.clone();
