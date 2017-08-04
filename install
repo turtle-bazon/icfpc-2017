@@ -15,7 +15,6 @@ directory = '$PWD/lambda_punter/vendor'
 EOF
 
 cd lambda_punter/
-
 cargo build
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
@@ -31,6 +30,25 @@ if [ $RETVAL -ne 0 ]; then
     mv -f $HOME/.cargo/config~ $HOME/.cargo/config
     exit $RETVAL
 fi
+cd ..
+
+cd lambda_punter_offline/
+cargo build
+RETVAL=$?
+if [ $RETVAL -ne 0 ]; then
+    echo "Build failed: $RETVAL"
+    mv -f $HOME/.cargo/config~ $HOME/.cargo/config
+    exit $RETVAL
+fi
+
+cargo test
+RETVAL=$?
+if [ $RETVAL -ne 0 ]; then
+    echo "Test failed: $RETVAL"
+    mv -f $HOME/.cargo/config~ $HOME/.cargo/config
+    exit $RETVAL
+fi
+cd ..
 
 mv -f $HOME/.cargo/config~ $HOME/.cargo/config
 
