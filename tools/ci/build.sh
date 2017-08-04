@@ -16,5 +16,8 @@ echo '!!!' >> $TEMP_DIR/build.sh
 cat build-dist-tail.sh >> $TEMP_DIR/build.sh
 
 cat $TEMP_DIR/build.sh | ssh punter@localhost -p 2222
+RETVAL=$?
 
 rm -rf $TEMP_DIR
+
+exit $RETVAL
