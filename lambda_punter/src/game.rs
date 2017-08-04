@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::types::PunterId;
+use super::types::{PunterId, SiteId};
 use super::map::Map;
 use super::proto::{Move, Setup};
 
@@ -20,6 +20,25 @@ impl GameState {
             map: setup.map,
             moves: HashMap::new(),
         }
+    }
+
+    pub fn score_for(mut self, punter: PunterId) -> u64 {
+        let is_path_reachable = |site1: SiteId, site2: SiteId| true;
+        let shortest_path = |site1: SiteId, site2: SiteId| 1;
+        let score_from_mine_to_site = |mine: SiteId, site: SiteId| {
+            if is_path_reachable(mine, site) {
+                let path_rang = shortest_path(mine, site);
+
+                path_rang * path_rang
+            } else {
+                0
+            }
+        };
+        let score_from_mine = |mine| 1;
+        self.map.mines
+            .iter()
+            .map(score_from_mine)
+            .sum()
     }
 
     pub fn play(mut self, moves: Vec<Move>) -> (Move, GameState) {
