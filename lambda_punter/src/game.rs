@@ -10,8 +10,10 @@ pub trait GameStateBuilder {
     fn build(&self, setup: Setup) -> Self::GameState;
 }
 
-pub trait GameState {
-    fn play(self, moves: Vec<Move>) -> (Move, Self);
+pub trait GameState: Sized {
+    type Error;
+
+    fn play(self, moves: Vec<Move>) -> Result<(Move, Self), Self::Error>;
     fn get_punter(&self) -> PunterId;
 }
 
@@ -39,7 +41,9 @@ pub struct SimpleGameState {
 }
 
 impl GameState for SimpleGameState {
-    fn play(mut self, moves: Vec<Move>) -> (Move, SimpleGameState) {
+    type Error = ();
+
+    fn play(mut self, moves: Vec<Move>) -> Result<(Move, SimpleGameState), ()> {
         for mv in moves {
             let punter = match mv {
                 Move::Claim { punter, .. } => punter,
@@ -51,7 +55,7 @@ impl GameState for SimpleGameState {
                 .push(mv);
         }
 
-        (Move::Pass { punter: self.punter, }, self)
+        Ok((Move::Pass { punter: self.punter, }, self))
     }
 
     fn get_punter(&self) -> PunterId {
