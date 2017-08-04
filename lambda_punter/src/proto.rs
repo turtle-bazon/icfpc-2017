@@ -3,6 +3,7 @@ use serde_json;
 
 use super::types::{PunterId, SiteId};
 use super::map::{Site,River,Map};
+use std::collections::BTreeMap;
 
 #[derive(PartialEq, Debug)]
 pub enum Req {
@@ -14,6 +15,7 @@ pub enum Req {
 #[derive(PartialEq, Debug)]
 pub enum Rep {
     Handshake { name: String, },
+    Timeout(usize),
     Setup(Setup),
     Move { moves: Vec<Move>, },
     Stop {
@@ -111,9 +113,9 @@ impl Rep {
                         }
                     }))
                 }
-                /*else if map.contains_key("timeout") {
-
-                }*/
+                else if map.contains_key("timeout") {
+                    Ok(Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?))
+                }
                 else if map.contains_key("you") {
                     Ok(Rep::Handshake {
                         name: serde_json::from_value::<String>(map.remove("you").unwrap()).map_err(Error::Json)?,
@@ -130,19 +132,53 @@ impl Rep {
     }
 }
 
+impl Req {
+    pub fn to_json(self) -> Result<String,Error> {
+        let mut res = BTreeMap::new();
+        match self {
+            Req::Handshake { name } => {
+                res.insert("me".to_string(),serde_json::to_value(name).map_err(Error::Json)?);
+            },
+            Req::Ready { punter } => {
+                res.insert("ready".to_string(),serde_json::to_value(punter).map_err(Error::Json)?);
+            },
+            Req::Move(mv) => {
+                match mv {
+                    Move::Claim { punter, source, target } => {
+                        let m = vec![("punter",serde_json::to_value(punter).map_err(Error::Json)?),
+                                     ("source",serde_json::to_value(source).map_err(Error::Json)?),
+                                     ("target",serde_json::to_value(target).map_err(Error::Json)?),
+                                     ].into_iter()
+                            .map(|x| (x.0.to_string(),x.1))
+                            .collect::<BTreeMap<String,Value>>();
+                        res.insert("claim".to_string(),serde_json::to_value(m).map_err(Error::Json)?);
+                    },
+                    Move::Pass { punter } => {
+                        let m = vec![("punter",serde_json::to_value(punter).map_err(Error::Json)?)].into_iter()
+                            .map(|x| (x.0.to_string(),x.1))
+                            .collect::<BTreeMap<String,Value>>();
+                        res.insert("pass".to_string(),serde_json::to_value(m).map_err(Error::Json)?);
+                    }
+                }
+            }
+        }
+        Ok(serde_json::to_string(&res).map_err(Error::Json)?)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_handshake() {
+    fn proto_handshake() {
         let object = Rep::from_json("{\"you\": \"test_name\"}").unwrap();
         let result = Rep::Handshake { name: "test_name".to_string() };
         assert_eq!(object,result);
     }
 
     #[test]
-    fn test_move_1() {
+    fn proto_move_1() {
         let object = Rep::from_json("{\"move\":{\"moves\":[{\"claim\":{\"punter\":0,\"source\":0,\"target\":1}},{\"claim\":{\"punter\":1,\"source\":1,\"target\":2}}]}}").unwrap();
         let result = Rep::Move {
             moves: vec![
@@ -154,7 +190,7 @@ mod test {
     }
 
     #[test]
-    fn test_move_2() {
+    fn proto_move_2() {
         let object = Rep::from_json("{\"move\":{\"moves\":[{\"pass\":{\"punter\":0}},{\"pass\":{\"punter\":1}}]}}").unwrap();
         let result = Rep::Move {
             moves: vec![
@@ -166,7 +202,7 @@ mod test {
     }
 
     #[test]
-    fn test_stop() {
+    fn proto_stop() {
         let object = Rep::from_json("{\"stop\":{\"moves\":[{\"claim\":{\"punter\":0,\"source\":5,\"target\":7}},{\"claim\":{\"punter\":1,\"source\":7,\"target\":1}}], \"scores\":[{\"punter\":0,\"score\":6},{\"punter\":1,\"score\":6}]}}").unwrap();
         let result = Rep::Stop {
             moves: vec![
@@ -182,7 +218,7 @@ mod test {
     }
 
     #[test]
-    fn test_setup() {
+    fn proto_setup() {
         let object = Rep::from_json("{\"punter\":0, \"punters\":2,
 \"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]}}").unwrap();
         let result = Rep::Setup(Setup {
@@ -212,4 +248,40 @@ mod test {
         assert_eq!(object,result);
     }
 
+    #[test]
+    fn proto_timeout() {
+        let object = Rep::from_json("{\"timeout\": 10}").unwrap();
+        let result = Rep::Timeout(10);
+        assert_eq!(object,result);
+    }
+
+    #[test]
+    fn proto_out_handshake() {
+        let object = Req::Handshake { name: "test_name".to_string() };
+        let result = "{\"me\":\"test_name\"}";
+        assert_eq!(object.to_json().unwrap(),result.to_string());
+    }
+
+    #[test]
+    fn proto_out_ready() {
+        let object = Req::Ready { punter: 1 };
+        let result = "{\"ready\":1}";
+        assert_eq!(object.to_json().unwrap(),result.to_string());
+    }
+
+    #[test]
+    fn proto_out_move_1() {
+        let object = Req::Move(Move::Claim { punter: 2, source: 8, target: 1 });
+        let result = "{\"claim\":{\"punter\":2,\"source\":8,\"target\":1}}";
+        assert_eq!(object.to_json().unwrap(),result.to_string());
+    }
+
+    #[test]
+    fn proto_out_move_2() {
+        let object = Req::Move(Move::Pass { punter: 0 });
+        let result = "{\"pass\":{\"punter\":0}}";
+        assert_eq!(object.to_json().unwrap(),result.to_string());
+    }
+
 }
+
