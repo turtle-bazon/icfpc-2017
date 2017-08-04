@@ -1,14 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use super::types::SiteId;
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Map {
     pub sites: HashMap<SiteId, Site>,
     pub rivers: HashSet<River>,
     pub mines: HashSet<SiteId>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Site {
     pub id: SiteId,
 }

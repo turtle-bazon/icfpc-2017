@@ -6,7 +6,7 @@ use super::proto::{Move, Setup};
 
 #[allow(dead_code)]
 pub struct GameState {
-    punter: PunterId,
+    pub punter: PunterId,
     punters_count: usize,
     map: Map,
     moves: HashMap<PunterId, Vec<Move>>,
