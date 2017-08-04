@@ -1,7 +1,10 @@
 [package]
 name = "lambda_punter_offline"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Alexey Voznyuk <me@swizard.info>"]
 
 [dependencies]
+log = "0.3"
+clap = "2.24"
+env_logger = "0.4"
 lambda_punter = { path = "../lambda_punter" }
