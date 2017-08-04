@@ -1,11 +1,12 @@
 [package]
 name = "lambda_punter"
-version = "0.1.16"
+version = "0.1.17"
 authors = ["Alexey Voznyuk <me@swizard.info>",
            "Azamat S. Kalimoulline <turtle@bazon.ru>",
            "merl <merl@kribrum.ru>"]
 
 [dependencies]
+log = "0.3"
 serde = "1.0.8"
 serde_json = "1.0"
 serde_derive = "1.0"

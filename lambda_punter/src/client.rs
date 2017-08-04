@@ -48,6 +48,7 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
             let encoded_req = req.to_json()
                 .map_err(SendError::PacketEncode)?;
             let length_req = format!("{}:", encoded_req.as_bytes().len());
+            debug!("P -> S | {}{}", length_req, encoded_req);
             tcp.write_all(length_req.as_bytes())
                 .map_err(SendError::TcpWriteLen)?;
             tcp.write_all(encoded_req.as_bytes())
@@ -88,6 +89,7 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
                 } else {
                     let packet_str = str::from_utf8(&packet)
                         .map_err(RecvError::TcpPacketString)?;
+                    debug!("S -> P | {}:{}", len, packet_str);
                     let rep = Rep::from_json(&packet_str)
                         .map_err(RecvError::PacketDecode)?;
                     Ok(rep)

@@ -70,7 +70,8 @@ mod test {
     use super::super::types::PunterId;
     use super::super::map::{Map, Site, River};
     use super::super::proto::{Req, Rep, Move, Setup, Score};
-    use super::super::game::{GameStateBuilder, GameState, SimpleGameStateBuilder};
+    use super::super::game::{GameStateBuilder, GameState};
+    use super::super::solvers::always_pass::AlwaysPassGameStateBuilder;
 
     #[test]
     fn handshake_err() {
@@ -80,7 +81,7 @@ mod test {
                 (),
                 |_, _req| Ok::<_, ()>(()),
                 |_| Ok::<_, ()>(Rep::Handshake { name: "bob".to_string(), }),
-                SimpleGameStateBuilder)
+                AlwaysPassGameStateBuilder)
                 .map(|v| v.0),
             Err(Error::UnexpectedHandshakeRep(Rep::Handshake { name: "bob".to_string(), })));
     }

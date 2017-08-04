@@ -5,7 +5,7 @@ use std::collections::{HashMap,HashSet};
 use super::super::types::{PunterId, SiteId};
 use super::super::map::Map;
 use super::super::proto::{Move, Setup};
-use super::super::game::{GameState,GameStateBuilder};
+use super::super::game::{GameState, GameStateBuilder};
 
 pub struct NearestGameStateBuilder;
 
@@ -17,7 +17,7 @@ impl GameStateBuilder for NearestGameStateBuilder {
         for r in &setup.map.rivers {
             let src = min(r.source,r.target);
             let dst = max(r.source,r.target);
-                
+
             if setup.map.mines.contains(&src)||setup.map.mines.contains(&dst) {
                 all_rivs.entry(0)
                     .or_insert_with(HashSet::new)
@@ -26,9 +26,9 @@ impl GameStateBuilder for NearestGameStateBuilder {
                 all_rivs.entry(1)
                     .or_insert_with(HashSet::new)
                     .insert((src,dst));
-            }        
+            }
         }
-        
+
         NearestGameState {
             punter: setup.punter,
             punters_count: setup.punters,
@@ -58,7 +58,7 @@ impl GameState for NearestGameState {
         self.update_moves(moves);
         Ok((match self.get_next_move() {
             Ok((src,dst)) => {
-                Move::Claim { punter: self.punter, source: src, target: dst} 
+                Move::Claim { punter: self.punter, source: src, target: dst}
             },
             Err(..) => {
                 Move::Pass { punter: self.punter, }
@@ -118,4 +118,3 @@ impl NearestGameState {
     }
 
 }
-
