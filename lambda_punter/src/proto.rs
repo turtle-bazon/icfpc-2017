@@ -1,3 +1,4 @@
+use serde::ser::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::value::Value;
 use serde_json;
@@ -98,8 +99,7 @@ impl Rep {
                             }
                         }).collect(),
                     }, maybe_state))
-                }
-                else if map.contains_key("stop") {
+                } else if map.contains_key("stop") {
                     let mut stop_node = map.remove("stop").unwrap();
                     let maybe_state = if let Value::Object(ref mut obj) = stop_node {
                         if let Some(value) = obj.remove("state") {
@@ -120,8 +120,7 @@ impl Rep {
                         }).collect(),
                         scores: stop.scores,
                     }, maybe_state))
-                }
-                else if map.contains_key("punter") && map.contains_key("punters") && map.contains_key("map") {
+                } else if map.contains_key("punter") && map.contains_key("punters") && map.contains_key("map") {
                     let smap = serde_json::from_value::<ServerMap>(map.remove("map").unwrap()).map_err(Error::Json)?;
                     Ok((Rep::Setup(Setup{
                         punter: serde_json::from_value::<PunterId>(map.remove("punter").unwrap()).map_err(Error::Json)?,
@@ -132,11 +131,9 @@ impl Rep {
                             mines: smap.mines.into_iter().collect(),
                         }
                     }), None))
-                }
-                else if map.contains_key("timeout") {
+                } else if map.contains_key("timeout") {
                     Ok((Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?), None))
-                }
-                else if map.contains_key("you") {
+                } else if map.contains_key("you") {
                     Ok((Rep::Handshake {
                         name: serde_json::from_value::<String>(map.remove("you").unwrap()).map_err(Error::Json)?,
                     }, None))
@@ -153,14 +150,17 @@ impl Rep {
 }
 
 impl Req {
-    pub fn to_json(self) -> Result<String,Error> {
+    pub fn to_json<S>(self, maybe_state: Option<S>) -> Result<String, Error> where S: Serialize {
         let mut res = BTreeMap::new();
         match self {
             Req::Handshake { name } => {
-                res.insert("me".to_string(),serde_json::to_value(name).map_err(Error::Json)?);
+                res.insert("me".to_string(), serde_json::to_value(name).map_err(Error::Json)?);
             },
             Req::Ready { punter } => {
-                res.insert("ready".to_string(),serde_json::to_value(punter).map_err(Error::Json)?);
+                res.insert("ready".to_string(), serde_json::to_value(punter).map_err(Error::Json)?);
+                if let Some(state) = maybe_state {
+                    res.insert("state".to_string(), serde_json::to_value(state).map_err(Error::Json)?);
+                }
             },
             Req::Move(mv) => {
                 match mv {
@@ -179,6 +179,9 @@ impl Req {
                             .collect::<BTreeMap<String,Value>>();
                         res.insert("pass".to_string(),serde_json::to_value(m).map_err(Error::Json)?);
                     }
+                }
+                if let Some(state) = maybe_state {
+                    res.insert("state".to_string(), serde_json::to_value(state).map_err(Error::Json)?);
                 }
             }
         }

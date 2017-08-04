@@ -46,7 +46,7 @@ pub fn run_network<A, GB>(addr: A, name: &str, gs_builder: GB) -> Result<(Vec<Sc
         name,
         tcp,
         move |tcp, req| {
-            let encoded_req = req.to_json()
+            let encoded_req = req.to_json::<GB::GameState>(None)
                 .map_err(SendError::PacketEncode)?;
             let length_req = format!("{}:", encoded_req.as_bytes().len());
             debug!("P -> S | {}{}", length_req, encoded_req);
