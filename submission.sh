@@ -11,6 +11,10 @@ install -m 755 target/release/lambda_punter_offline $DSTDIR/punter
 cargo clean
 cd ..
 
+cd lambda_punter/
+cargo clean
+cd ..
+
 touch $DSTDIR/install
 chmod +x $DSTDIR/install
 install -m 644 PACKAGES $DSTDIR
