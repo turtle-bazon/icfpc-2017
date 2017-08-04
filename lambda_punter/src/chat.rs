@@ -10,6 +10,9 @@ pub enum Error<SR, RR, GE> {
     UnexpectedHandshakeRep(Rep),
     UnexpectedSetupRep(Rep),
     UnexpectedMoveRep(Rep),
+    UnexpectedSetupOrMoveRep(Rep),
+    UnexpectedStateArrived,
+    NoExpectedStateArrived,
 }
 
 pub fn run_online<S, FS, SR, FR, RR, GB>(
@@ -61,6 +64,60 @@ pub fn run_online<S, FS, SR, FR, RR, GB>(
                 return Err(Error::UnexpectedMoveRep(other)),
         }
 
+    }
+}
+
+pub fn run_offline<S, FS, SR, FR, RR, GB>(
+    name: &str,
+    mut fn_state: S,
+    mut send_fn: FS,
+    mut recv_fn: FR,
+    gs_builder: GB)
+    -> Result<Option<(Vec<Score>, GB::GameState)>, Error<SR, RR, <GB::GameState as GameState>::Error>>
+    where FS: FnMut(&mut S, Req, Option<GB::GameState>) -> Result<(), SR>,
+          FR: FnMut(&mut S) -> Result<(Rep, Option<GB::GameState>), RR>,
+          GB: GameStateBuilder
+{
+    // P → S {"me" : name}
+    send_fn(&mut fn_state, Req::Handshake { name: name.to_string(), }, None)
+        .map_err(Error::Send)?;
+    // S → P {"you" : name}
+    match recv_fn(&mut fn_state).map_err(Error::Recv)? {
+        (Rep::Handshake { name: ref rep_name, }, None) if rep_name == name =>
+            (),
+        (Rep::Handshake { .. }, Some(..)) =>
+            return Err(Error::UnexpectedStateArrived),
+        (other, _) =>
+            return Err(Error::UnexpectedHandshakeRep(other)),
+    }
+    match recv_fn(&mut fn_state).map_err(Error::Recv)? {
+        // S → P {"punter" : p, "punters" : n, "map" : map}
+        (Rep::Setup(setup), None) => {
+            let game_state = gs_builder.build(setup);
+            // P → S {"ready" : p, "state" : state}
+            send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), }, Some(game_state))
+                .map_err(Error::Send)
+                .map(|()| None)
+        },
+        (Rep::Setup(..), Some(..)) =>
+            Err(Error::UnexpectedStateArrived),
+        // S → P {"move" : {"moves" : moves},"state" : state}
+        (Rep::Move { moves, }, Some(game_state)) => {
+            let (move_, next_game_state) = game_state.play(moves)
+                .map_err(Error::GameState)?;
+            send_fn(&mut fn_state, Req::Move(move_), Some(next_game_state))
+                .map_err(Error::Send)
+                .map(|()| None)
+        },
+        (Rep::Move { .. }, None) =>
+            Err(Error::NoExpectedStateArrived),
+        // S → P {"stop" : {"moves" : moves,"scores" : scores},"state" : state}
+        (Rep::Stop { scores, moves, }, Some(game_state)) =>
+            Ok(Some((scores, game_state.stop(moves).map_err(Error::GameState)?))),
+        (Rep::Stop { .. }, None) =>
+            Err(Error::NoExpectedStateArrived),
+        (other, _) =>
+            return Err(Error::UnexpectedSetupOrMoveRep(other)),
     }
 }
 
