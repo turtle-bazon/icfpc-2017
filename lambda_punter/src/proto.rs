@@ -45,31 +45,33 @@ pub struct Score {
 pub enum Error {
     Json(serde_json::Error),
     UnexpectedJson,
-    
+
 }
 
 
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
+#[allow(non_camel_case_types)]
 enum ServerMove {
     claim { punter: PunterId, source: SiteId, target: SiteId, },
     pass { punter: PunterId, },
 }
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ServerMoves {
     moves: Vec<ServerMove>,
 }
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ServerStop {
     moves: Vec<ServerMove>,
     scores: Vec<Score>,
 }
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ServerMap {
     sites: Vec<Site>,
     rivers: Vec<River>,
     mines: Vec<SiteId>,
 }
+
 impl Rep {
     pub fn from_json(s: &str) -> Result<Rep,Error> {
         match serde_json::from_str::<Value>(s).map_err(Error::Json)? {
@@ -94,7 +96,7 @@ impl Rep {
                                 ServerMove::pass { punter } => Move::Pass { punter: punter },
                             }
                         }).collect(),
-                        scores: stop.scores, 
+                        scores: stop.scores,
                     })
                 }
                 else if map.contains_key("punter") && map.contains_key("punters") && map.contains_key("map") {
@@ -108,7 +110,7 @@ impl Rep {
                             mines: smap.mines.into_iter().collect(),
                         }
                     }))
-                }              
+                }
                 /*else if map.contains_key("timeout") {
 
                 }*/
@@ -124,14 +126,14 @@ impl Rep {
                 Err(Error::UnexpectedJson)
             }
         }
-        
+
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    
+
     #[test]
     fn test_handshake() {
         let object = Rep::from_json("{\"you\": \"test_name\"}").unwrap();
@@ -185,7 +187,7 @@ mod test {
 \"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]}}").unwrap();
         let result = Rep::Setup(Setup {
             punter: 0,
-            punters: 2, 
+            punters: 2,
             map: Map {
                 sites: vec![Site {id:4}, Site {id:1}, Site {id:3}, Site {id:6}, Site {id:5}, Site {id:0}, Site {id:7}, Site {id:2}]
                     .into_iter()

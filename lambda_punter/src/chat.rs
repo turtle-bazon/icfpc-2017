@@ -111,7 +111,7 @@ mod test {
     }
 
     #[test]
-    fn alice_script() {
+    fn sample_alice_script() {
         // -> {"me":"Alice"}
         // <- {"you":"Alice"}
         // <- {"punter":0, "punters":2,
@@ -132,8 +132,9 @@ mod test {
         // <- {"stop":{"moves":[{"claim":{"punter":0,"source":5,"target":7}},{"claim":{"punter":1,"source":7,"target":1}}], "scores":[{"punter":0,"score":6},{"punter":1,"score":6}]}}
 
         common_test_script(
+            "Alice",
             vec![
-                Req::Handshake { name: "alice".to_string(), },
+                Req::Handshake { name: "Alice".to_string(), },
                 Req::Ready { punter: 0, },
                 Req::Move(Move::Claim { punter: 0, source: 0, target: 1, }),
                 Req::Move(Move::Claim { punter: 0, source: 2, target: 3, }),
@@ -143,7 +144,7 @@ mod test {
                 Req::Move(Move::Claim { punter: 0, source: 5, target: 7, }),
             ],
             vec![
-                Rep::Handshake { name: "alice".to_string(), },
+                Rep::Handshake { name: "Alice".to_string(), },
                 Rep::Setup(Setup {
                     punter: 0,
                     punters: 2,
@@ -172,7 +173,71 @@ mod test {
         );
     }
 
-    fn common_test_script(mut reqs: Vec<Req>, mut reps: Vec<Rep>, mut gs_script: Vec<Move>, expected_score: Vec<Score>) {
+    #[test]
+    fn sample_bob_script() {
+        // -> {"me":"Bob"}
+        // <- {"you":"Bob"}
+        // <- {"punter":1, "punters":2,
+        // "map":{"sites":[{"id":4},{"id":1},{"id":3},{"id":6},{"id":5},{"id":0},{"id":7},{"id":2}], "rivers":[{"source":3,"target":4},{"source":0,"target":1},{"source":2,"target":3}, {"source":1,"target":3},{"source":5,"target":6},{"source":4,"target":5}, {"source":3,"target":5},{"source":6,"target":7},{"source":5,"target":7},
+        // {"source":1,"target":7},{"source":0,"target":7},{"source":1,"target":2}], "mines":[1,5]}}
+        // -> {"ready":1}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":0,"target":1}},{"pass":{"punter":1}}]}}
+        // -> {"claim":{"punter":1,"source":1,"target":2}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":2,"target":3}},{"claim":{"punter":1,"source":1,"target":2}}]}}
+        // -> {"claim":{"punter":1,"source":3,"target":4}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":4,"target":5}},{"claim":{"punter":1,"source":3,"target":4}}]}}
+        // -> {"claim":{"punter":1,"source":5,"target":6}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":6,"target":7}},{"claim":{"punter":1,"source":5,"target":6}}]}}
+        // -> {"claim":{"punter":1,"source":7,"target":0}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":1,"target":3}},{"claim":{"punter":1,"source":7,"target":0}}]}}
+        // -> {"claim":{"punter":1,"source":3,"target":5}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":5,"target":7}},{"claim":{"punter":1,"source":3,"target":5}}]}}
+        // -> {"claim":{"punter":1,"source":7,"target":1}}
+        // <- {"stop":{"moves":[{"claim":{"punter":0,"source":5,"target":7}},{"claim":{"punter":1,"source":7,"target":1}}], "scores":[{"punter":0,"score":6},{"punter":1,"score":6}]}}
+
+        common_test_script(
+            "Bob",
+            vec![
+                Req::Handshake { name: "Bob".to_string(), },
+                Req::Ready { punter: 1, },
+                Req::Move(Move::Claim { punter: 1, source: 1, target: 2, }),
+                Req::Move(Move::Claim { punter: 1, source: 3, target: 4, }),
+                Req::Move(Move::Claim { punter: 1, source: 5, target: 6, }),
+                Req::Move(Move::Claim { punter: 1, source: 7, target: 0, }),
+                Req::Move(Move::Claim { punter: 1, source: 3, target: 5, }),
+                Req::Move(Move::Claim { punter: 1, source: 7, target: 1, }),
+            ],
+            vec![
+                Rep::Handshake { name: "Bob".to_string(), },
+                Rep::Setup(Setup {
+                    punter: 1,
+                    punters: 2,
+                    map: default_map(),
+                }),
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 0, target: 1, }, Move::Pass { punter: 1, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 2, target: 3, }, Move::Claim { punter: 1, source: 1, target: 2, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 4, target: 5, }, Move::Claim { punter: 1, source: 3, target: 4, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 6, target: 7, }, Move::Claim { punter: 1, source: 5, target: 6, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 1, target: 3, }, Move::Claim { punter: 1, source: 7, target: 0, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 5, target: 7, }, Move::Claim { punter: 1, source: 3, target: 5, },] },
+                Rep::Stop {
+                    moves: vec![Move::Claim { punter: 0, source: 5, target: 7, }, Move::Claim { punter: 1, source: 7, target: 1, },],
+                    scores: vec![Score { punter: 0, score: 6, }, Score { punter: 1, score: 6, }],
+                },
+            ],
+            vec![
+                Move::Claim { punter: 1, source: 1, target: 2, },
+                Move::Claim { punter: 1, source: 3, target: 4, },
+                Move::Claim { punter: 1, source: 5, target: 6, },
+                Move::Claim { punter: 1, source: 7, target: 0, },
+                Move::Claim { punter: 1, source: 3, target: 5, },
+                Move::Claim { punter: 1, source: 7, target: 1, },
+            ],
+            vec![Score { punter: 0, score: 6 }, Score { punter: 1, score: 6 }]
+        );
+    }
+
+    fn common_test_script(name: &str, mut reqs: Vec<Req>, mut reps: Vec<Rep>, mut gs_script: Vec<Move>, expected_score: Vec<Score>) {
         reqs.reverse();
         reps.reverse();
         gs_script.reverse();
@@ -224,7 +289,7 @@ mod test {
         }
 
         let (final_score, final_state) = run_online(
-            "alice",
+            name,
             |req| if let Some(expected_req) = reqs.pop() {
                 if expected_req == req {
                     Ok(())
