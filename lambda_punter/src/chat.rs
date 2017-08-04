@@ -17,7 +17,7 @@ pub fn run_online<FS, SR, FR, RR, GB>(
     mut send_fn: FS,
     mut recv_fn: FR,
     gs_builder: GB)
-    -> Result<Vec<Score>, Error<SR, RR, <GB::GameState as GameState>::Error>>
+    -> Result<(Vec<Score>, GB::GameState), Error<SR, RR, <GB::GameState as GameState>::Error>>
     where FS: FnMut(Req) -> Result<(), SR>,
           FR: FnMut() -> Result<Rep, RR>,
           GB: GameStateBuilder
@@ -54,8 +54,8 @@ pub fn run_online<FS, SR, FR, RR, GB>(
                 game_state = next_game_state;
                 send_fn(Req::Move(move_)).map_err(Error::Send)?;
             },
-            Rep::Stop { scores, .. } =>
-                return Ok(scores),
+            Rep::Stop { scores, moves, } =>
+                return Ok((scores, game_state.stop(moves).map_err(Error::GameState)?)),
             other =>
                 return Err(Error::UnexpectedMoveRep(other)),
         }
@@ -78,7 +78,8 @@ mod test {
                 "alice",
                 |_req| Ok::<_, ()>(()),
                 || Ok::<_, ()>(Rep::Handshake { name: "bob".to_string(), }),
-                SimpleGameStateBuilder),
+                SimpleGameStateBuilder)
+                .map(|v| v.0),
             Err(Error::UnexpectedHandshakeRep(Rep::Handshake { name: "bob".to_string(), })));
     }
 
@@ -205,6 +206,10 @@ mod test {
                 }
             }
 
+            fn stop(self, _moves: Vec<Move>) -> Result<Self, Self::Error> {
+                Ok(self)
+            }
+
             fn get_punter(&self) -> PunterId {
                 self.punter
             }
@@ -227,7 +232,8 @@ mod test {
                 } else {
                     Err(RepsStackIsEmpty)
                 },
-                ScriptGameStateBuilder),
+                ScriptGameStateBuilder)
+                .map(|v| v.0),
             Ok(vec![Score { punter: 0, score: 6 }, Score { punter: 1, score: 6 }]));
     }
 }

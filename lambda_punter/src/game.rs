@@ -14,6 +14,7 @@ pub trait GameState: Sized {
     type Error;
 
     fn play(self, moves: Vec<Move>) -> Result<(Move, Self), Self::Error>;
+    fn stop(self, moves: Vec<Move>) -> Result<Self, Self::Error>;
     fn get_punter(&self) -> PunterId;
 }
 
@@ -43,7 +44,23 @@ pub struct SimpleGameState {
 impl GameState for SimpleGameState {
     type Error = ();
 
-    fn play(mut self, moves: Vec<Move>) -> Result<(Move, SimpleGameState), ()> {
+    fn play(mut self, moves: Vec<Move>) -> Result<(Move, Self), Self::Error> {
+        self.update_moves(moves);
+        Ok((Move::Pass { punter: self.punter, }, self))
+    }
+
+    fn stop(mut self, moves: Vec<Move>) -> Result<Self, Self::Error> {
+        self.update_moves(moves);
+        Ok(self)
+    }
+
+    fn get_punter(&self) -> PunterId {
+        self.punter
+    }
+}
+
+impl SimpleGameState {
+    fn update_moves(&mut self, moves: Vec<Move>) {
         for mv in moves {
             let punter = match mv {
                 Move::Claim { punter, .. } => punter,
@@ -54,16 +71,8 @@ impl GameState for SimpleGameState {
                 .or_insert_with(Vec::new)
                 .push(mv);
         }
-
-        Ok((Move::Pass { punter: self.punter, }, self))
     }
 
-    fn get_punter(&self) -> PunterId {
-        self.punter
-    }
-}
-
-impl SimpleGameState {
     pub fn score_for(&self, _punter: PunterId) -> u64 {
         let is_path_reachable = |_site1: SiteId, _site2: SiteId| true;
         let shortest_path = |_site1: SiteId, _site2: SiteId| 1;
