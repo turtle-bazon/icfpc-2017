@@ -3,14 +3,14 @@ use super::types::{PunterId, SiteId};
 use super::map::Map;
 
 #[derive(Debug)]
-pub enum OnlineReq {
+pub enum Req {
     Handshake { name: String, },
     Ready { punter: PunterId, },
     Move(Move),
 }
 
 #[derive(Debug)]
-pub enum OnlineRep {
+pub enum Rep {
     Handshake { name: String, },
     Setup {
         punter: PunterId,
