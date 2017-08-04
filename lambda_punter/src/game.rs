@@ -7,7 +7,7 @@ use super::proto::{Move, Setup};
 pub trait GameStateBuilder {
     type GameState: GameState;
 
-    fn build(&self, setup: Setup) -> Self::GameState;
+    fn build(self, setup: Setup) -> Self::GameState;
 }
 
 pub trait GameState: Sized {
@@ -23,7 +23,7 @@ pub struct SimpleGameStateBuilder;
 impl GameStateBuilder for SimpleGameStateBuilder {
     type GameState = SimpleGameState;
 
-    fn build(&self, setup: Setup) -> Self::GameState {
+    fn build(self, setup: Setup) -> Self::GameState {
         SimpleGameState {
             punter: setup.punter,
             punters_count: setup.punters,

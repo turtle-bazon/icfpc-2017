@@ -83,27 +83,7 @@ mod test {
             Err(Error::UnexpectedHandshakeRep(Rep::Handshake { name: "bob".to_string(), })));
     }
 
-    #[test]
-    fn alice_script() {
-        // -> {"me":"Alice"}
-        // <- {"you":"Alice"}
-        // <- {"punter":0, "punters":2,
-        // "map":{"sites":[{"id":4},{"id":1},{"id":3},{"id":6},{"id":5},{"id":0},{"id":7},{"id":2}], "rivers":[{"source":3,"target":4},{"source":0,"target":1},{"source":2,"target":3}, {"source":1,"target":3},{"source":5,"target":6},{"source":4,"target":5}, {"source":3,"target":5},{"source":6,"target":7},{"source":5,"target":7}, {"source":1,"target":7},{"source":0,"target":7},{"source":1,"target":2}], "mines":[1,5]}}
-        // -> {"ready":0}
-        // <- {"move":{"moves":[{"pass":{"punter":0}},{"pass":{"punter":1}}]}}
-        // -> {"claim":{"punter":0,"source":0,"target":1}}
-        // <- {"move":{"moves":[{"claim":{"punter":0,"source":0,"target":1}},{"claim":{"punter":1,"source":1,"target":2}}]}}
-        // -> {"claim":{"punter":0,"source":2,"target":3}}
-        // <- {"move":{"moves":[{"claim":{"punter":0,"source":2,"target":3}},{"claim":{"punter":1,"source":3,"target":4}}]}}
-        // -> {"claim":{"punter":0,"source":4,"target":5}}
-        // <- {"move":{"moves":[{"claim":{"punter":0,"source":4,"target":5}},{"claim":{"punter":1,"source":5,"target":6}}]}}
-        // -> {"claim":{"punter":0,"source":6,"target":7}}
-        // <- {"move":{"moves":[{"claim":{"punter":0,"source":6,"target":7}},{"claim":{"punter":1,"source":7,"target":0}}]}}
-        // -> {"claim":{"punter":0,"source":1,"target":3}}
-        // <- {"move":{"moves":[{"claim":{"punter":0,"source":1,"target":3}},{"claim":{"punter":1,"source":3,"target":5}}]}}
-        // -> {"claim":{"punter":0,"source":5,"target":7}}
-        // <- {"stop":{"moves":[{"claim":{"punter":0,"source":5,"target":7}},{"claim":{"punter":1,"source":7,"target":1}}], "scores":[{"punter":0,"score":6},{"punter":1,"score":6}]}}
-
+    fn default_map() -> Map {
         let mut map: Map = Default::default();
         map.sites.insert(4, Site { id: 4 });
         map.sites.insert(1, Site { id: 1 });
@@ -127,38 +107,75 @@ mod test {
         map.rivers.insert(River { source: 1, target: 2, });
         map.mines.insert(1);
         map.mines.insert(5);
+        map
+    }
 
-        let mut reqs = vec![
-            Req::Handshake { name: "alice".to_string(), },
-            Req::Ready { punter: 0, },
-            Req::Move(Move::Claim { punter: 0, source: 0, target: 1, }),
-            Req::Move(Move::Claim { punter: 0, source: 2, target: 3, }),
-            Req::Move(Move::Claim { punter: 0, source: 4, target: 5, }),
-            Req::Move(Move::Claim { punter: 0, source: 6, target: 7, }),
-            Req::Move(Move::Claim { punter: 0, source: 1, target: 3, }),
-            Req::Move(Move::Claim { punter: 0, source: 5, target: 7, }),
-        ];
+    #[test]
+    fn alice_script() {
+        // -> {"me":"Alice"}
+        // <- {"you":"Alice"}
+        // <- {"punter":0, "punters":2,
+        // "map":{"sites":[{"id":4},{"id":1},{"id":3},{"id":6},{"id":5},{"id":0},{"id":7},{"id":2}], "rivers":[{"source":3,"target":4},{"source":0,"target":1},{"source":2,"target":3}, {"source":1,"target":3},{"source":5,"target":6},{"source":4,"target":5}, {"source":3,"target":5},{"source":6,"target":7},{"source":5,"target":7}, {"source":1,"target":7},{"source":0,"target":7},{"source":1,"target":2}], "mines":[1,5]}}
+        // -> {"ready":0}
+        // <- {"move":{"moves":[{"pass":{"punter":0}},{"pass":{"punter":1}}]}}
+        // -> {"claim":{"punter":0,"source":0,"target":1}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":0,"target":1}},{"claim":{"punter":1,"source":1,"target":2}}]}}
+        // -> {"claim":{"punter":0,"source":2,"target":3}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":2,"target":3}},{"claim":{"punter":1,"source":3,"target":4}}]}}
+        // -> {"claim":{"punter":0,"source":4,"target":5}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":4,"target":5}},{"claim":{"punter":1,"source":5,"target":6}}]}}
+        // -> {"claim":{"punter":0,"source":6,"target":7}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":6,"target":7}},{"claim":{"punter":1,"source":7,"target":0}}]}}
+        // -> {"claim":{"punter":0,"source":1,"target":3}}
+        // <- {"move":{"moves":[{"claim":{"punter":0,"source":1,"target":3}},{"claim":{"punter":1,"source":3,"target":5}}]}}
+        // -> {"claim":{"punter":0,"source":5,"target":7}}
+        // <- {"stop":{"moves":[{"claim":{"punter":0,"source":5,"target":7}},{"claim":{"punter":1,"source":7,"target":1}}], "scores":[{"punter":0,"score":6},{"punter":1,"score":6}]}}
+
+        common_test_script(
+            vec![
+                Req::Handshake { name: "alice".to_string(), },
+                Req::Ready { punter: 0, },
+                Req::Move(Move::Claim { punter: 0, source: 0, target: 1, }),
+                Req::Move(Move::Claim { punter: 0, source: 2, target: 3, }),
+                Req::Move(Move::Claim { punter: 0, source: 4, target: 5, }),
+                Req::Move(Move::Claim { punter: 0, source: 6, target: 7, }),
+                Req::Move(Move::Claim { punter: 0, source: 1, target: 3, }),
+                Req::Move(Move::Claim { punter: 0, source: 5, target: 7, }),
+            ],
+            vec![
+                Rep::Handshake { name: "alice".to_string(), },
+                Rep::Setup(Setup {
+                    punter: 0,
+                    punters: 2,
+                    map: default_map(),
+                }),
+                Rep::Move { moves: vec![Move::Pass { punter: 0, }, Move::Pass { punter: 1, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 0, target: 1, }, Move::Claim { punter: 1, source: 1, target: 2, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 2, target: 3, }, Move::Claim { punter: 1, source: 3, target: 4, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 4, target: 5, }, Move::Claim { punter: 1, source: 5, target: 6, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 6, target: 7, }, Move::Claim { punter: 1, source: 7, target: 0, },] },
+                Rep::Move { moves: vec![Move::Claim { punter: 0, source: 1, target: 3, }, Move::Claim { punter: 1, source: 3, target: 5, },] },
+                Rep::Stop {
+                    moves: vec![Move::Claim { punter: 0, source: 5, target: 7, }, Move::Claim { punter: 1, source: 7, target: 1, },],
+                    scores: vec![Score { punter: 0, score: 6, }, Score { punter: 1, score: 6, }],
+                },
+            ],
+            vec![
+                Move::Claim { punter: 0, source: 0, target: 1, },
+                Move::Claim { punter: 0, source: 2, target: 3, },
+                Move::Claim { punter: 0, source: 4, target: 5, },
+                Move::Claim { punter: 0, source: 6, target: 7, },
+                Move::Claim { punter: 0, source: 1, target: 3, },
+                Move::Claim { punter: 0, source: 5, target: 7, },
+            ],
+            vec![Score { punter: 0, score: 6 }, Score { punter: 1, score: 6 }]
+        );
+    }
+
+    fn common_test_script(mut reqs: Vec<Req>, mut reps: Vec<Rep>, mut gs_script: Vec<Move>, expected_score: Vec<Score>) {
         reqs.reverse();
-
-        let mut reps = vec![
-            Rep::Handshake { name: "alice".to_string(), },
-            Rep::Setup(Setup {
-                punter: 0,
-                punters: 2,
-                map: map,
-            }),
-            Rep::Move { moves: vec![Move::Pass { punter: 0, }, Move::Pass { punter: 1, },] },
-            Rep::Move { moves: vec![Move::Claim { punter: 0, source: 0, target: 1, }, Move::Claim { punter: 1, source: 1, target: 2, },] },
-            Rep::Move { moves: vec![Move::Claim { punter: 0, source: 2, target: 3, }, Move::Claim { punter: 1, source: 3, target: 4, },] },
-            Rep::Move { moves: vec![Move::Claim { punter: 0, source: 4, target: 5, }, Move::Claim { punter: 1, source: 5, target: 6, },] },
-            Rep::Move { moves: vec![Move::Claim { punter: 0, source: 6, target: 7, }, Move::Claim { punter: 1, source: 7, target: 0, },] },
-            Rep::Move { moves: vec![Move::Claim { punter: 0, source: 1, target: 3, }, Move::Claim { punter: 1, source: 3, target: 5, },] },
-            Rep::Stop {
-                moves: vec![Move::Claim { punter: 0, source: 5, target: 7, }, Move::Claim { punter: 1, source: 7, target: 1, },],
-                scores: vec![Score { punter: 0, score: 6, }, Score { punter: 1, score: 6, }],
-            },
-        ];
         reps.reverse();
+        gs_script.reverse();
 
         #[derive(PartialEq, Debug)]
         struct Unexpected<T> { expected: Option<T>, provided: T, };
@@ -170,24 +187,15 @@ mod test {
             script: Vec<Move>,
         };
 
-        struct ScriptGameStateBuilder;
+        struct ScriptGameStateBuilder(Vec<Move>);
 
         impl GameStateBuilder for ScriptGameStateBuilder {
             type GameState = ScriptGameState;
 
-            fn build(&self, setup: Setup) -> Self::GameState {
-                let mut script = vec![
-                    Move::Claim { punter: 0, source: 0, target: 1, },
-                    Move::Claim { punter: 0, source: 2, target: 3, },
-                    Move::Claim { punter: 0, source: 4, target: 5, },
-                    Move::Claim { punter: 0, source: 6, target: 7, },
-                    Move::Claim { punter: 0, source: 1, target: 3, },
-                    Move::Claim { punter: 0, source: 5, target: 7, },
-                ];
-                script.reverse();
+            fn build(self, setup: Setup) -> Self::GameState {
                 ScriptGameState {
                     punter: setup.punter,
-                    script: script,
+                    script: self.0,
                 }
             }
         }
@@ -215,25 +223,25 @@ mod test {
             }
         }
 
-        assert_eq!(
-            run_online(
-                "alice",
-                |req| if let Some(expected_req) = reqs.pop() {
-                    if expected_req == req {
-                        Ok(())
-                    } else {
-                        Err(Unexpected { expected: Some(expected_req), provided: req, })
-                    }
+        let (final_score, final_state) = run_online(
+            "alice",
+            |req| if let Some(expected_req) = reqs.pop() {
+                if expected_req == req {
+                    Ok(())
                 } else {
-                    Err(Unexpected { expected: None, provided: req, })
-                },
-                || if let Some(rep) = reps.pop() {
-                    Ok(rep)
-                } else {
-                    Err(RepsStackIsEmpty)
-                },
-                ScriptGameStateBuilder)
-                .map(|v| v.0),
-            Ok(vec![Score { punter: 0, score: 6 }, Score { punter: 1, score: 6 }]));
+                    Err(Unexpected { expected: Some(expected_req), provided: req, })
+                }
+            } else {
+                Err(Unexpected { expected: None, provided: req, })
+            },
+            || if let Some(rep) = reps.pop() {
+                Ok(rep)
+            } else {
+                Err(RepsStackIsEmpty)
+            },
+            ScriptGameStateBuilder(gs_script))
+            .unwrap();
+        assert_eq!(final_score, expected_score);
+        assert_eq!(final_state.script, vec![]);
     }
 }
