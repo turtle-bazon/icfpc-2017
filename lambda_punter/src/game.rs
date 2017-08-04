@@ -25,8 +25,23 @@ impl GameState {
     }
 
     pub fn score_for(&self, punter: PunterId) -> u64 {
-        let is_path_reachable = |site1: SiteId, site2: SiteId| true;
-        let shortest_path = |site1: SiteId, site2: SiteId| 1;
+        let sites: HashMap<SiteId, Option<usize>> = self.map.sites
+            .iter()
+            .map(|(site, _)| (*site, None))
+            .collect();
+        let is_path_reachable = |site1: SiteId, site2: SiteId| {
+            true
+        };
+        let site_rivers = |site: SiteId| -> Vec<&River> {
+            self.map.rivers
+                .iter()
+                .filter(|river| river.source == site || river.target == site)
+                .collect()
+        };
+        let shortest_path = |site1: SiteId, site2: SiteId| {
+
+            1
+        };
         let score_from_mine_to_site = |mine: SiteId, site: SiteId| {
             if is_path_reachable(mine, site) {
                 let path_rang = shortest_path(mine, site);
@@ -36,7 +51,49 @@ impl GameState {
                 0
             }
         };
-        let score_from_mine = |mine| 1;
+        let score_from_mine = |&mine| -> u64 {
+            let mut sites_to_proceed: Vec<(SiteId, usize)> = Vec::new();
+            let mut site_nodes: HashMap<SiteId, usize> = HashMap::new();
+            let mut visited_nodes: HashSet<SiteId> = HashSet::new();
+
+            let mut search_paths = |site: SiteId, initial: usize| -> Vec<SiteId> {
+                if ! visited_nodes.contains(&site) {
+                    println!("Node: {}, site_nodes: {:?}", site, &site_nodes);
+                    let path = site_nodes.entry(site).or_insert(initial);
+                    if *path > initial {
+                        *path = initial;
+                    }
+                    
+                    println!("Node: {}, site_nodes: {:?}", site, site_nodes);
+                    println!("");
+                    visited_nodes.insert(site);
+                    let site_rivers = site_rivers(site);
+
+                    site_rivers
+                        .iter()
+                        .flat_map(|river| Some(river.source).into_iter().chain(Some(river.target).into_iter()))
+                        .collect()
+                } else {
+                    vec![]
+                }
+            };
+
+            sites_to_proceed.push((mine, 0));
+
+            while sites_to_proceed.len() > 0 {
+                let (current_site, current_value) = sites_to_proceed.remove(0);
+                let mut cs1 = current_site;
+                let mut cv1 = current_value;
+
+                for add_site in search_paths(cs1, cv1) {
+                    sites_to_proceed.push((add_site, current_value + 1));
+                }
+            }
+
+            self.map.sites.iter()
+                .map(|(&site, _)| score_from_mine_to_site(mine, site))
+                .sum()
+        };
         self.map.mines
             .iter()
             .map(score_from_mine)
