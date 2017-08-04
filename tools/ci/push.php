@@ -54,14 +54,14 @@ foreach($changes as $change) {
   $summary = "BUILD " . ($buildResult ? "OK" : "FAIL");
   echo $summary . "\n";
 
-  $statusMessage = "{$newRefName} @ {$refHead}: {$summary}. Details: https://icfpc.gnoll.tech/" . $logPath;
+  $statusMessage = "*{$summary}*\n{$newRefName} @ {$refHead}.\nDetails: https://icfpc.gnoll.tech/" . $logPath;
 
   try {
     // Create Telegram API object
     $telegram = new Longman\TelegramBot\Telegram(Config::$TELEGRAM_API_KEY, 'skobochka_bot');
 
     foreach (Config::$TELEGRAM_ROOMS as $room) {
-      Longman\TelegramBot\Request::sendMessage(['chat_id' => $room, 'text' => $statusMessage]);
+      Longman\TelegramBot\Request::sendMessage(['chat_id' => $room, 'text' => $statusMessage, 'parse_mode' => 'Markdown']);
     }
 
   } catch (Longman\TelegramBot\Exception\TelegramException $e) {
