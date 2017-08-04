@@ -66,9 +66,10 @@ pub fn run_online<FS, SR, FR, RR, GB>(
 #[cfg(test)]
 mod test {
     use super::{Error, run_online};
+    use super::super::types::PunterId;
     use super::super::map::{Map, Site, River};
     use super::super::proto::{Req, Rep, Move, Setup, Score};
-    use super::super::game::{GameStateBuilder, SimpleGameStateBuilder};
+    use super::super::game::{GameStateBuilder, GameState, SimpleGameStateBuilder};
 
     #[test]
     fn handshake_err() {
@@ -190,6 +191,25 @@ mod test {
             }
         }
 
+        #[derive(PartialEq, Debug)]
+        struct MovesStackIsEmpty;
+
+        impl GameState for ScriptGameState {
+            type Error = MovesStackIsEmpty;
+
+            fn play(mut self, _moves: Vec<Move>) -> Result<(Move, Self), Self::Error> {
+                if let Some(move_) = self.script.pop() {
+                    Ok((move_, self))
+                } else {
+                    Err(MovesStackIsEmpty)
+                }
+            }
+
+            fn get_punter(&self) -> PunterId {
+                self.punter
+            }
+        }
+
         assert_eq!(
             run_online(
                 "alice",
@@ -206,7 +226,8 @@ mod test {
                     Ok(rep)
                 } else {
                     Err(RepsStackIsEmpty)
-                }),
-            Ok(vec![]));
+                },
+                ScriptGameStateBuilder),
+            Ok(vec![Score { punter: 0, score: 6 }, Score { punter: 1, score: 6 }]));
     }
 }
