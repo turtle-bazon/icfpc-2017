@@ -6,6 +6,7 @@ extern crate lambda_punter;
 use std::process;
 use clap::{Arg, AppSettings, SubCommand};
 use lambda_punter::{client, game, solvers};
+use lambda_punter::game::GameState;
 
 fn main() {
     env_logger::init().unwrap();
@@ -97,15 +98,18 @@ fn proceed_with_solver<GB, EF>(
     err_map: EF)
     -> Result<(), Error>
     where GB: game::GameStateBuilder,
-          EF: Fn(client::Error<<GB::GameState as game::GameState>::Error>) -> Error
+          EF: Fn(client::Error<<GB::GameState as GameState>::Error>) -> Error
 {
-    let (scores, _game_state) = client::run_network((server_host, server_port), hello_name, gs_builder)
+    let (scores, game_state) = client::run_network((server_host, server_port), hello_name, gs_builder)
         .map_err(err_map)?;
     info!("all done");
 
     println!("Game over! Total server scores:");
     for score in scores {
-        println!("  Punter: {}, score: {}", score.punter, score.score);
+        println!("  Punter: {}{}, score: {}",
+                 score.punter,
+                 if game_state.get_punter() == score.punter { " (it's me)" } else { "" },
+                 score.score);
     }
 
     Ok(())
