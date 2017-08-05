@@ -26,12 +26,10 @@ pub enum SendError {
 pub enum RecvError {
     ReadLen(io::Error),
     ReadLenTooBig(usize),
-    ReadUnexpectedClose,
     LenEmpty,
     LenString(str::Utf8Error),
     LenParse(num::ParseIntError),
     ReadPacket(io::Error),
-    ReadPacketNotEnough { want_bytes: usize, received_bytes: usize, },
     PacketString(str::Utf8Error),
     PacketDecode(proto::Error),
     UnexpectedStateArrived,
@@ -106,11 +104,9 @@ fn generic_read<R, S>(reader: &mut R) -> Result<(Rep, Option<S>), RecvError>
     let mut packet = Vec::with_capacity(9);
     loop {
         let mut byte = [0; 1];
-        let bytes_read = reader.read(&mut byte)
+        let () = reader.read_exact(&mut byte)
             .map_err(RecvError::ReadLen)?;
-        if bytes_read == 0 {
-            return Err(RecvError::ReadUnexpectedClose);
-        } else if byte[0] == b':' {
+        if byte[0] == b':' {
             break;
         } else {
             packet.push(byte[0]);
@@ -125,22 +121,13 @@ fn generic_read<R, S>(reader: &mut R) -> Result<(Rep, Option<S>), RecvError>
             .map_err(RecvError::LenParse)?;
         packet.clear();
         packet.extend(iter::repeat(0).take(len));
-        let bytes_read = reader.read(&mut packet)
+        let () = reader.read_exact(&mut packet)
             .map_err(RecvError::ReadPacket)?;
-        if bytes_read == 0 {
-            Err(RecvError::ReadUnexpectedClose)
-        } else if bytes_read != len {
-            Err(RecvError::ReadPacketNotEnough {
-                want_bytes: len,
-                received_bytes: bytes_read,
-            })
-        } else {
-            let packet_str = str::from_utf8(&packet)
-                .map_err(RecvError::PacketString)?;
-            debug!("S -> P | {}:{}", len, packet_str);
-            let (rep, maybe_state) = Rep::from_json(&packet_str)
-                .map_err(RecvError::PacketDecode)?;
-            Ok((rep, maybe_state))
-        }
+        let packet_str = str::from_utf8(&packet)
+            .map_err(RecvError::PacketString)?;
+        debug!("S -> P | {}:{}", len, packet_str);
+        let (rep, maybe_state) = Rep::from_json(&packet_str)
+            .map_err(RecvError::PacketDecode)?;
+        Ok((rep, maybe_state))
     }
 }
