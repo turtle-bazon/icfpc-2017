@@ -131,15 +131,24 @@ impl GameState for LinkMinesGameState {
                         target: max(s, t),
                     });
                 for &mine_site in self.mines_connected_sites.iter() {
-                    if self.rivers_graph.shortest_path(river.source, mine_site, &mut gcache, &check_claimed).is_some() {
-                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: mine_site, });
-                    } else if self.rivers_graph.shortest_path(river.target, mine_site, &mut gcache, &check_claimed).is_some() {
-                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.target, target: mine_site, });
+                    if let Some(path) = self.rivers_graph.shortest_path(mine_site, river.source, &mut gcache, &check_claimed) {
+                        debug!(" ;; fallback: there is a path from mines connected sites {} to free river end {}", mine_site, river.source);
+                        if let (Some(&s), Some(&t)) = (path.get(0), path.get(1)) {
+                            maybe_move = Some(Move::Claim { punter: self.punter, source: s, target: t, });
+                            break;
+                        }
+                    }
+                    if let Some(path) = self.rivers_graph.shortest_path(mine_site, river.target, &mut gcache, &check_claimed) {
+                        debug!(" ;; fallback: there is a path from mines connected sites {} to free river end {}", mine_site, river.target);
+                        if let (Some(&s), Some(&t)) = (path.get(0), path.get(1)) {
+                            maybe_move = Some(Move::Claim { punter: self.punter, source: s, target: t, });
+                            break;
+                        }
                     }
                 }
-                if maybe_move.is_some() {
-                    break;
-                }
+            }
+            if maybe_move.is_some() {
+                break;
             }
         }
         if let Some(move_) = maybe_move {
