@@ -45,7 +45,7 @@ pub fn run_online<S, FS, SR, FR, RR, GB>(
                 return Err(Error::UnexpectedSetupRep(other)),
         };
     // P → S {"ready" : p}
-    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), }, None)
+    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: None, }, None)
         .map_err(Error::Send)?;
     // gameplay
     loop {
@@ -95,7 +95,7 @@ pub fn run_offline<S, FS, SR, FR, RR, GB>(
         (Rep::Setup(setup), None) => {
             let game_state = gs_builder.build(setup);
             // P → S {"ready" : p, "state" : state}
-            send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), }, Some(game_state))
+            send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: None, }, Some(game_state))
                 .map_err(Error::Send)
                 .map(|()| None)
         },
@@ -195,7 +195,7 @@ mod test {
             "Alice",
             vec![
                 Req::Handshake { name: "Alice".to_string(), },
-                Req::Ready { punter: 0, },
+                Req::Ready { punter: 0, futures: None, },
                 Req::Move(Move::Claim { punter: 0, source: 0, target: 1, }),
                 Req::Move(Move::Claim { punter: 0, source: 2, target: 3, }),
                 Req::Move(Move::Claim { punter: 0, source: 4, target: 5, }),
@@ -209,6 +209,7 @@ mod test {
                     punter: 0,
                     punters: 2,
                     map: default_map(),
+                    settings: Default::default(),
                 }),
                 Rep::Move { moves: vec![Move::Pass { punter: 0, }, Move::Pass { punter: 1, },] },
                 Rep::Move { moves: vec![Move::Claim { punter: 0, source: 0, target: 1, }, Move::Claim { punter: 1, source: 1, target: 2, },] },
@@ -259,7 +260,7 @@ mod test {
             "Bob",
             vec![
                 Req::Handshake { name: "Bob".to_string(), },
-                Req::Ready { punter: 1, },
+                Req::Ready { punter: 1, futures: None, },
                 Req::Move(Move::Claim { punter: 1, source: 1, target: 2, }),
                 Req::Move(Move::Claim { punter: 1, source: 3, target: 4, }),
                 Req::Move(Move::Claim { punter: 1, source: 5, target: 6, }),
@@ -273,6 +274,7 @@ mod test {
                     punter: 1,
                     punters: 2,
                     map: default_map(),
+                    settings: Default::default(),
                 }),
                 Rep::Move { moves: vec![Move::Claim { punter: 0, source: 0, target: 1, }, Move::Pass { punter: 1, },] },
                 Rep::Move { moves: vec![Move::Claim { punter: 0, source: 2, target: 3, }, Move::Claim { punter: 1, source: 1, target: 2, },] },

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 #[derive(PartialEq, Debug)]
 pub enum Req {
     Handshake { name: String, },
-    Ready { punter: PunterId, },
+    Ready { punter: PunterId, futures: Option<Vec<Future>>, },
     Move(Move),
 }
 
@@ -24,6 +24,12 @@ pub enum Rep {
         moves: Vec<Move>,
         scores: Vec<Score>,
     },
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Future {
+    pub source: SiteId,
+    pub target: SiteId,
 }
 
 #[derive(PartialEq, Debug, Deserialize)]
@@ -172,8 +178,20 @@ impl Req {
             Req::Handshake { name } => {
                 res.insert("me".to_string(), serde_json::to_value(name).map_err(Error::Json)?);
             },
-            Req::Ready { punter } => {
+            Req::Ready { punter, futures, } => {
                 res.insert("ready".to_string(), serde_json::to_value(punter).map_err(Error::Json)?);
+                if let Some(futs) = futures {
+                    let fut_values = futs.into_iter()
+                        .map(|fut| {
+                            serde_json::to_value(
+                                vec![("source".to_string(), serde_json::to_value(fut.source).map_err(Error::Json)?),
+                                     ("target".to_string(), serde_json::to_value(fut.target).map_err(Error::Json)?)]
+                                    .into_iter()
+                                    .collect::<BTreeMap<String, Value>>()).map_err(Error::Json)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    res.insert("futures".to_string(), Value::Array(fut_values));
+                }
                 if let Some(state) = maybe_state {
                     res.insert("state".to_string(), serde_json::to_value(state).map_err(Error::Json)?);
                 }
@@ -283,6 +301,41 @@ mod test {
                          River {source:1, target:2} ].into_iter().collect(),
                 mines: vec![1,5].into_iter().collect(),
             },
+            settings: Default::default(),
+        });
+        assert_eq!(object,result);
+    }
+
+    #[test]
+    fn proto_setup_settings() {
+        let object = Rep::from_json::<()>("{\"punter\":0, \"punters\":2,
+\"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]},\"settings\":{\"futures\":true}}").unwrap().0;
+        let result = Rep::Setup(Setup {
+            punter: 0,
+            punters: 2,
+            map: Map {
+                sites: vec![Site {id:4}, Site {id:1}, Site {id:3}, Site {id:6}, Site {id:5}, Site {id:0}, Site {id:7}, Site {id:2}]
+                    .into_iter()
+                    .map(|s| {
+                        (s.id, s)
+                    }).collect(),
+                rivers: vec![ River {source:3, target:4},
+                         River {source:0, target:1},
+                         River {source:2, target:3},
+                         River {source:1, target:3},
+                         River {source:5, target:6},
+                         River {source:4, target:5},
+                         River {source:3, target:5},
+                         River {source:6, target:7},
+                         River {source:5, target:7},
+                         River {source:1, target:7},
+                         River {source:0, target:7},
+                         River {source:1, target:2} ].into_iter().collect(),
+                mines: vec![1,5].into_iter().collect(),
+            },
+            settings: Settings {
+                futures: true,
+            },
         });
         assert_eq!(object,result);
     }
@@ -303,8 +356,15 @@ mod test {
 
     #[test]
     fn proto_out_ready() {
-        let object = Req::Ready { punter: 1 };
+        let object = Req::Ready { punter: 1, futures: None, };
         let result = "{\"ready\":1}";
+        assert_eq!(object.to_json::<()>(None).unwrap(),result.to_string());
+    }
+
+    #[test]
+    fn proto_out_ready_futs() {
+        let object = Req::Ready { punter: 1, futures: Some(vec![Future { source: 0, target: 1, }]), };
+        let result = "{\"futures\":[{\"source\":0,\"target\":1}],\"ready\":1}";
         assert_eq!(object.to_json::<()>(None).unwrap(),result.to_string());
     }
 
