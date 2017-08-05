@@ -12,6 +12,7 @@ pub struct Graph {
 pub struct GraphCache {
     pqueue: BinaryHeap<PQNode>,
     visited: HashSet<SiteId>,
+    path_buf: Vec<(SiteId, usize)>,
     path: Vec<SiteId>,
 }
 
@@ -19,6 +20,7 @@ impl GraphCache {
     fn clear(&mut self) {
         self.pqueue.clear();
         self.visited.clear();
+        self.path_buf.clear();
         self.path.clear();
     }
 }
@@ -45,8 +47,32 @@ impl Graph {
         }
     }
 
-    pub fn shortest_path<'a>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache) -> &'a [SiteId] {
-        unimplemented!()
+    pub fn shortest_path<'a>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
+        cache.clear();
+        cache.path_buf.push((source, 0));
+        cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, });
+        while let Some(PQNode { site, cost: current_cost, mut phead, }) = cache.pqueue.pop() {
+            if site == target {
+                while phead != 0 {
+                    let (site_hop, next_phead) = cache.path_buf[phead - 1];
+                    cache.path.push(site_hop);
+                    phead = next_phead;
+                }
+                cache.path.reverse();
+                return Some(&cache.path);
+            }
+            cache.visited.insert(site);
+            if let Some(neighs) = self.neighs.get(&site) {
+                for &reachable_site in neighs.iter() {
+                    if cache.visited.contains(&reachable_site) {
+                        continue;
+                    }
+                    cache.path_buf.push((reachable_site, phead));
+                    cache.pqueue.push(PQNode { site: reachable_site, cost: current_cost + 1, phead: cache.path_buf.len(), });
+                }
+            }
+        }
+        None
     }
 }
 
@@ -54,6 +80,7 @@ impl Graph {
 struct PQNode {
     site: SiteId,
     cost: usize,
+    phead: usize,
 }
 
 impl Ord for PQNode {
@@ -66,5 +93,21 @@ impl Ord for PQNode {
 impl PartialOrd for PQNode {
     fn partial_cmp(&self, other: &PQNode) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Graph;
+
+    #[test]
+    fn shortest_path() {
+        let mut cache = Default::default();
+        let graph = Graph::from_iter(
+            [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
+                .iter()
+                .cloned());
+        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache), Some(path14));
+        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache), Some(path15));
     }
 }
