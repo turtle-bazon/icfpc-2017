@@ -3,39 +3,8 @@
 require_once ('common.php');
 require_once ('vendor/autoload.php');
 
-$repoUrl = Config::$REPO_URL;
-
-$inputJSON = file_get_contents('php://input');
-$body = json_decode($inputJSON, true);
-
-$body = $body['push'];
-
-if (!isset($body['changes'])) {
-  echo "No changes in push\n";
-  die(-1);
-}
-
-$changes = $body['changes'];
-echo "Callback has " . count($changes) . " changes\n";
-
-foreach($changes as $change) {
-  if (!isset($change['new'])) {
-    continue;
-  }
-
-  $newRef = $change['new'];
-  $newRefType = $newRef['type'];
-  $newRefName = $newRef['name'];
-
-  if ($newRefType !== 'branch') {
-    echo "Skipping new ref '{$newRefName}' of type '{$newRefType}'\n";
-    continue;
-  }
-
-  if (!in_array($newRefName, Config::$TRACK_BRANCHES)) {
-    echo "Skipping branch '{$newRefName}' bcs is not tracked\n";
-    continue;
-  }
+function buildBranch($newRef) {
+  $repoUrl = Config::$REPO_URL;
 
   $refTarget = $newRef['target'];
   $refHead = $refTarget['hash'];
@@ -79,5 +48,43 @@ foreach($changes as $change) {
     // Silence is golden!
     // log telegram errors
     echo $e;
+  }
+}
+
+
+$inputJSON = file_get_contents('php://input');
+$body = json_decode($inputJSON, true);
+
+$body = $body['push'];
+
+if (!isset($body['changes'])) {
+  echo "No changes in push\n";
+  die(-1);
+}
+
+$changes = $body['changes'];
+echo "Callback has " . count($changes) . " changes\n";
+
+foreach($changes as $change) {
+  if (!isset($change['new'])) {
+    continue;
+  }
+
+  $newRef = $change['new'];
+  $newRefType = $newRef['type'];
+  $newRefName = $newRef['name'];
+
+  switch ($newRefType) {
+    case 'branch':
+      if (!in_array($newRefName, Config::$TRACK_BRANCHES)) {
+        echo "Skipping branch '{$newRefName}' bcs is not tracked\n";
+        continue;
+      }
+
+      buildBranch($newRef);
+      break;
+    default:
+      echo "Skipping new ref '{$newRefName}' of type '{$newRefType}'\n";
+      continue;
   }
 }
