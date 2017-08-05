@@ -32,6 +32,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
         let futures =
             if let Some(&((source, target), _)) = pairs.last() {
                 if setup.settings.futures {
+                    debug!(" ;; declaring future: from {} to {}", source, target);
                     Some(vec![Future { source: source, target: target, }])
                 } else {
                     None
