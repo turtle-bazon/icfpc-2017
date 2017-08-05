@@ -31,6 +31,12 @@ pub struct Setup {
     pub punter: PunterId,
     pub punters: usize,
     pub map: Map,
+    pub settings: Settings,
+}
+
+#[derive(PartialEq, Default, Debug, Deserialize)]
+pub struct Settings {
+    pub futures: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -129,7 +135,17 @@ impl Rep {
                             sites: smap.sites.into_iter().map(|s| (s.id,s)).collect(),
                             rivers: smap.rivers.into_iter().collect(),
                             mines: smap.mines.into_iter().collect(),
-                        }
+                        },
+                        settings: if let Some(Value::Object(mut settings_obj)) = map.remove("settings") {
+                            Settings {
+                                futures: match settings_obj.remove("futures") {
+                                    Some(Value::Bool(true)) => true,
+                                    _ => false,
+                                }
+                            }
+                        } else {
+                            Default::default()
+                        },
                     }), None))
                 } else if map.contains_key("timeout") {
                     Ok((Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?), None))
