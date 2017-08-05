@@ -26,10 +26,12 @@ pub enum SendError {
 pub enum RecvError {
     ReadLen(io::Error),
     ReadLenTooBig(usize),
+    ReadUnexpectedClose,
     LenEmpty,
     LenString(str::Utf8Error),
     LenParse(num::ParseIntError),
     ReadPacket(io::Error),
+    ReadPacketNotEnough { want_bytes: usize, received_bytes: usize, },
     PacketString(str::Utf8Error),
     PacketDecode(proto::Error),
     UnexpectedStateArrived,
@@ -104,12 +106,21 @@ fn generic_read<R, S>(reader: &mut R) -> Result<(Rep, Option<S>), RecvError>
     let mut packet = Vec::with_capacity(9);
     loop {
         let mut byte = [0; 1];
-        let () = reader.read_exact(&mut byte)
-            .map_err(RecvError::ReadLen)?;
-        if byte[0] == b':' {
-            break;
-        } else {
-            packet.push(byte[0]);
+        match reader.read(&mut byte) {
+            Ok(0) =>
+                return Err(RecvError::ReadUnexpectedClose),
+            Ok(1) if byte[0] == b':' =>
+                break,
+            Ok(1) =>
+                packet.push(byte[0]),
+            Ok(_) =>
+                unreachable!(),
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted =>
+                continue,
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock =>
+                continue,
+            Err(e) =>
+                return Err(RecvError::ReadLen(e)),
         }
     }
     if packet.is_empty() {
@@ -121,13 +132,38 @@ fn generic_read<R, S>(reader: &mut R) -> Result<(Rep, Option<S>), RecvError>
             .map_err(RecvError::LenParse)?;
         packet.clear();
         packet.extend(iter::repeat(0).take(len));
-        let () = reader.read_exact(&mut packet)
-            .map_err(RecvError::ReadPacket)?;
-        let packet_str = str::from_utf8(&packet)
-            .map_err(RecvError::PacketString)?;
-        debug!("S -> P | {}:{}", len, packet_str);
-        let (rep, maybe_state) = Rep::from_json(&packet_str)
-            .map_err(RecvError::PacketDecode)?;
-        Ok((rep, maybe_state))
+        let received_bytes = {
+            let mut buf: &mut [_] = &mut packet;
+            while !buf.is_empty() {
+                match reader.read(buf) {
+                    Ok(0) =>
+                        break,
+                    Ok(n) => {
+                        let tmp = buf;
+                        buf = &mut tmp[n..];
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted =>
+                        (),
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock =>
+                        (),
+                    Err(e) =>
+                        return Err(RecvError::ReadPacket(e)),
+                }
+            }
+            len - buf.len()
+        };
+        if received_bytes != len {
+            Err(RecvError::ReadPacketNotEnough {
+                want_bytes: len,
+                received_bytes: received_bytes,
+            })
+        } else {
+            let packet_str = str::from_utf8(&packet)
+                .map_err(RecvError::PacketString)?;
+            debug!("S -> P | {}:{}", len, packet_str);
+            let (rep, maybe_state) = Rep::from_json(&packet_str)
+                .map_err(RecvError::PacketDecode)?;
+            Ok((rep, maybe_state))
+        }
     }
 }
