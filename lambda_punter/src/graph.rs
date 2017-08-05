@@ -87,6 +87,7 @@ impl Ord for PQNode {
     fn cmp(&self, other: &PQNode) -> Ordering {
         other.cost.cmp(&self.cost)
             .then_with(|| self.site.cmp(&other.site))
+            .then_with(|| self.phead.cmp(&other.phead))
     }
 }
 
@@ -108,6 +109,7 @@ mod test {
                 .iter()
                 .cloned());
         let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache), Some(path14));
-        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache), Some(path15));
+        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache), Some(path15));
+        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache), Some(path04));
     }
 }
