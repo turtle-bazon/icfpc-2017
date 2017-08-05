@@ -24,6 +24,7 @@ enum Error {
     MissingParameter(&'static str),
     AlwaysPassSolver(client::Error<()>),
     NearestSolver(client::Error<()>),
+    LinkMinesSolver(client::Error<()>),
 }
 
 fn run() -> Result<(), Error> {
@@ -42,6 +43,9 @@ fn run() -> Result<(), Error> {
         .subcommand(SubCommand::with_name("nearest")
                     .display_order(2)
                     .about("solvers::nearest"))
+        .subcommand(SubCommand::with_name("link_mines")
+                    .display_order(3)
+                    .about("solvers::link_mines"))
         .get_matches();
 
     let hello_name = matches.value_of("hello-name")
@@ -54,6 +58,9 @@ fn run() -> Result<(), Error> {
     } else if let Some(..) = matches.subcommand_matches("nearest") {
         debug!("using solvers::nearest");
         proceed_with_solver(hello_name, solvers::nearest::NearestGameStateBuilder, Error::NearestSolver)
+    } else if let Some(..) = matches.subcommand_matches("link_mines") {
+        debug!("using solvers::link_mines");
+        proceed_with_solver(hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
     } else {
         debug!("using default solvers::nearest");
         proceed_with_solver(hello_name, solvers::nearest::NearestGameStateBuilder, Error::NearestSolver)
