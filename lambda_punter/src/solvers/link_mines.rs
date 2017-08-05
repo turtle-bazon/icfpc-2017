@@ -29,11 +29,13 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
         }
         let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
         pairs.sort_by_key(|p| p.1);
-        let goals = pairs.into_iter().map(|p| p.0).collect();
+        let goals = pairs.into_iter().map(|p| ((p.0).0, (p.0).0, (p.0).1)).collect();
         LinkMinesGameState {
             punter: setup.punter,
+            rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
             goals: goals,
+            goals_rev: Vec::new(),
             claimed_rivers: HashSet::new(),
         }
     }
@@ -42,8 +44,10 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
 #[derive(Serialize, Deserialize)]
 pub struct LinkMinesGameState {
     punter: PunterId,
+    rivers: HashSet<River>,
     rivers_graph: Graph,
-    goals: Vec<(SiteId, SiteId)>,
+    goals: Vec<(SiteId, SiteId, SiteId)>,
+    goals_rev: Vec<(SiteId, SiteId)>,
     claimed_rivers: HashSet<River>,
 }
 
@@ -54,29 +58,50 @@ impl GameState for LinkMinesGameState {
         self.update_moves(moves);
 
         let mut gcache = Default::default();
-        while let Some((source, target)) = self.goals.pop() {
-            debug!(" ;; found current goal: from {} to {}", source, target);
-            let maybe_path = {
-                let claimed_rivers = &self.claimed_rivers;
-                let check_claimed = |(s, t)| !claimed_rivers
-                    .contains(&River {
-                        source: min(s, t),
-                        target: max(s, t),
-                    });
-                self.rivers_graph.shortest_path(source, target, &mut gcache, check_claimed)
-            };
-            if let Some(path) = maybe_path {
-                debug!(" ;; there is a path for goal from {} to {}: {:?}", source, target, path);
-                if let (Some(&ps), Some(&pt)) = (path.get(0), path.get(1)) {
-                    let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
-                    self.goals.push((pt, target));
-                    return Ok((move_, self));
+        let mut pass = 0;
+        while pass < 2 {
+            while let Some((orig_source, source, target)) = self.goals.pop() {
+                debug!(" ;; found current goal: from {} (originally {}) to {}", source, orig_source, target);
+                let maybe_path = {
+                    let claimed_rivers = &self.claimed_rivers;
+                    let check_claimed = |(s, t)| !claimed_rivers
+                        .contains(&River {
+                            source: min(s, t),
+                            target: max(s, t),
+                        });
+                    self.rivers_graph.shortest_path(source, target, &mut gcache, check_claimed)
+                };
+                if let Some(path) = maybe_path {
+                    debug!(" ;; there is a path for goal from {} to {}: {:?}", source, target, path);
+                    if let (Some(&ps), Some(&pt)) = (path.get(0), path.get(1)) {
+                        let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
+                        self.goals.push((orig_source, pt, target));
+                        return Ok((move_, self));
+                    }
                 }
+                // path is done, revert it for the future
+                debug!(" ;; reverting path from {} to {}", orig_source, target);
+                self.goals_rev.push((orig_source, target));
             }
+            // all mines are connected somehow, try again
+            let iter = self.goals_rev.drain(..).map(|(s, t)| (s, s, t));
+            self.goals.extend(iter);
+            pass += 1;
         }
 
-        // TODO: choose other river
-        Ok((Move::Pass { punter: self.punter, }, self))
+        // choose other free river
+        let mut maybe_move = None;
+        for river in self.rivers.iter() {
+            if !self.claimed_rivers.contains(river) {
+                maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: river.target, });
+                break;
+            }
+        }
+        if let Some(move_) = maybe_move {
+            Ok((move_, self))
+        } else {
+            Ok((Move::Pass { punter: self.punter, }, self))
+        }
     }
 
     fn stop(mut self, moves: Vec<Move>) -> Result<Self, Self::Error> {
