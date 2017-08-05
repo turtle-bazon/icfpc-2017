@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, BinaryHeap};
 
 use super::types::SiteId;
-use super::map::Map;
+use super::map::{Map, River};
 
 #[derive(Serialize, Deserialize)]
 pub struct Graph {
@@ -12,7 +12,7 @@ pub struct Graph {
 #[derive(Default)]
 pub struct GraphCache {
     pqueue: BinaryHeap<PQNode>,
-    visited: HashSet<SiteId>,
+    visited: HashMap<SiteId, f64>,
     path_buf: Vec<(SiteId, usize)>,
     path: Vec<SiteId>,
 }
@@ -73,10 +73,10 @@ impl Graph {
                 cache.path.reverse();
                 return Some(&cache.path);
             }
-            cache.visited.insert(site);
+            cache.visited.insert(site, 1.0);
             if let Some(neighs) = self.neighs.get(&site) {
                 for &reachable_site in neighs.iter() {
-                    if cache.visited.contains(&reachable_site) {
+                    if cache.visited.contains_key(&reachable_site) {
                         continue;
                     }
                     match probe_edge((site, reachable_site)) {
@@ -95,6 +95,20 @@ impl Graph {
             }
         }
         None
+    }
+
+    // The Girvan-Newman Algorithm
+    pub fn rivers_betweenness(&self, cache: &mut GraphCache) -> HashMap<River, f64> {
+        let mut rivers = HashMap::new();
+        for (&node, _) in self.neighs.iter() {
+            self.rivers_betweenness_pass(node, &mut rivers, cache);
+        }
+        rivers
+    }
+
+    fn rivers_betweenness_pass(&self, start_node: SiteId, rivers: &mut HashMap<River, f64>, cache: &mut GraphCache) {
+        cache.clear();
+        cache.pqueue.push(PQNode { site: start_node, cost: 0, phead: 0, });
     }
 }
 
@@ -156,5 +170,20 @@ mod test {
         let path14: &[_] = &[1, 2, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache, edge_probe), Some(path14));
         let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache, edge_probe), Some(path15));
         let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache, edge_probe), Some(path04));
+    }
+
+    #[test]
+    fn betweenness() {
+        let mut cache = Default::default();
+        let graph = Graph::from_iter(
+            [(0, 1), (0, 2), (1, 2), (1, 3), (3, 4), (3, 5), (3, 6), (4, 5), (5, 6)]
+                .iter()
+                .cloned());
+        let b_rivers = graph.rivers_betweenness(&mut cache);
+        let vb_rivers: Vec<_> = b_rivers
+            .into_iter()
+            .map(|(r, v)| ((r.source, r.target), v))
+            .collect();
+        assert_eq!(vb_rivers, vec![]);
     }
 }
