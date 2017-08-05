@@ -26,6 +26,11 @@ impl GraphCache {
     }
 }
 
+pub enum EdgeAttr {
+    Blocked,
+    Accessible { edge_cost: usize, },
+}
+
 impl Graph {
     pub fn from_map(map: &Map) -> Graph {
         Graph::from_iter(map.rivers.iter().map(|r| (r.source, r.target)))
@@ -48,8 +53,12 @@ impl Graph {
         }
     }
 
-    pub fn shortest_path<'a, F>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache, mut accessible: F) -> Option<&'a [SiteId]>
-        where F: FnMut((SiteId, SiteId)) -> bool
+    pub fn shortest_path_only<'a>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
+        self.shortest_path(source, target, cache, |_| EdgeAttr::Accessible { edge_cost: 1, })
+    }
+
+    pub fn shortest_path<'a, E>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache, mut probe_edge: E) -> Option<&'a [SiteId]>
+        where E: FnMut((SiteId, SiteId)) -> EdgeAttr
     {
         cache.clear();
         cache.path_buf.push((source, 0));
@@ -70,11 +79,18 @@ impl Graph {
                     if cache.visited.contains(&reachable_site) {
                         continue;
                     }
-                    if !accessible((site, reachable_site)) {
-                        continue;
+                    match probe_edge((site, reachable_site)) {
+                        EdgeAttr::Blocked =>
+                            continue,
+                        EdgeAttr::Accessible { edge_cost, } => {
+                            cache.path_buf.push((reachable_site, phead));
+                            cache.pqueue.push(PQNode {
+                                site: reachable_site,
+                                cost: current_cost + edge_cost,
+                                phead: cache.path_buf.len(),
+                            });
+                        },
                     }
-                    cache.path_buf.push((reachable_site, phead));
-                    cache.pqueue.push(PQNode { site: reachable_site, cost: current_cost + 1, phead: cache.path_buf.len(), });
                 }
             }
         }
@@ -114,8 +130,8 @@ mod test {
             [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
                 .iter()
                 .cloned());
-        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache, |_| true), Some(path14));
-        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache, |_| true), Some(path15));
-        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache, |_| true), Some(path04));
+        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only(1, 4, &mut cache), Some(path14));
+        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path_only(1, 5, &mut cache), Some(path15));
+        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path_only(0, 4, &mut cache), Some(path04));
     }
 }

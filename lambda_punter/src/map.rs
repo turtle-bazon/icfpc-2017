@@ -1,3 +1,4 @@
+use std::cmp::{min, max};
 use std::collections::{HashMap, HashSet};
 use super::types::SiteId;
 
@@ -19,4 +20,13 @@ pub struct Site {
 pub struct River {
     pub source: SiteId,
     pub target: SiteId,
+}
+
+impl River {
+    pub fn new(source: SiteId, target: SiteId) -> River {
+        River {
+            source: min(source, target),
+            target: max(source, target),
+        }
+    }
 }
