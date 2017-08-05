@@ -142,11 +142,21 @@ fn run() -> Result<(), Error> {
     let mut rng = rand::thread_rng();
     let mut total_wins = 0;
     let mut total_loses = 0;
+
+    let mut ports_done: Vec<_> = (server_start_port .. server_end_port + 1).collect();
+    let mut ports_avail = Vec::with_capacity(ports_done.len());
+
     while games_played < total_games {
         while slaves.len() < slaves_count {
+            // get more ports if none left
+            if ports_avail.is_empty() {
+                ports_avail.extend(ports_done.drain(..));
+                rng.shuffle(&mut ports_avail);
+            }
+
             let tx = tx.clone();
             let server_host = server_host.to_string();
-            let server_port = rng.gen_range(server_start_port, server_end_port + 1);
+            let server_port = ports_avail.pop().unwrap();
             let hello_name = hello_name.to_string();
             slave_id_counter += 1;
             debug!("running slave {} for game on port {}", slave_id_counter, server_port);
@@ -184,7 +194,7 @@ fn run() -> Result<(), Error> {
             slaves.push((slave_id_counter, slave));
         }
 
-        let slave_id =
+        let (slave_id, port) =
             match rx.recv().unwrap() {
                 Ok((slave_id, port, my_punter, scores)) => {
                     println!("SUCCESS for game port {}:", port);
@@ -212,16 +222,17 @@ fn run() -> Result<(), Error> {
                             total_loses += 1;
                         }
                     }
-                    slave_id
+                    (slave_id, port)
                 },
                 Err((slave_id, port, err)) => {
                     println!("ERROR for game port {}: {:?}", port, err);
-                    slave_id
+                    (slave_id, port)
                 },
             };
         let slave_i = slaves.iter().position(|s| s.0 == slave_id).unwrap();
         let (_, slave) = slaves.swap_remove(slave_i);
         let () = slave.join().map_err(Error::GameThreadJoin)?;
+        ports_done.push(port);
     }
 
     println!(" == OVERALL GAMES STAT: {} wins / {} loses ({}% winrate) == ",
