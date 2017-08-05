@@ -91,17 +91,14 @@ impl Rep {
     pub fn from_json<S>(s: &str) -> Result<(Rep, Option<S>), Error> where S: DeserializeOwned {
         match serde_json::from_str::<Value>(s).map_err(Error::Json)? {
             Value::Object(mut map) => {
+                let maybe_state = if let Some(value) = map.remove("state") {
+                    Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
+                } else {
+                    None
+                };
+
                 if map.contains_key("move") {
-                    let mut move_node = map.remove("move").unwrap();
-                    let maybe_state = if let Value::Object(ref mut obj) = move_node {
-                        if let Some(value) = obj.remove("state") {
-                            Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
+                    let move_node = map.remove("move").unwrap();
                     let smove = serde_json::from_value::<ServerMoves>(move_node).map_err(Error::Json)?;
                     Ok((Rep::Move {
                         moves: smove.moves.into_iter().map(|m| {
@@ -112,16 +109,7 @@ impl Rep {
                         }).collect(),
                     }, maybe_state))
                 } else if map.contains_key("stop") {
-                    let mut stop_node = map.remove("stop").unwrap();
-                    let maybe_state = if let Value::Object(ref mut obj) = stop_node {
-                        if let Some(value) = obj.remove("state") {
-                            Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
+                    let stop_node = map.remove("stop").unwrap();
                     let stop = serde_json::from_value::<ServerStop>(stop_node).map_err(Error::Json)?;
                     Ok((Rep::Stop {
                         moves: stop.moves.into_iter().map(|m| {

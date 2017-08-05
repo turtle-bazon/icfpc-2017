@@ -1,6 +1,6 @@
 [package]
 name = "lambda_punter"
-version = "0.1.29"
+version = "0.1.30"
 authors = ["Alexey Voznyuk <me@swizard.info>",
            "Azamat S. Kalimoulline <turtle@bazon.ru>",
            "merl <merl@kribrum.ru>"]
