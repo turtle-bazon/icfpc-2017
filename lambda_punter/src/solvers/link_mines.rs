@@ -29,7 +29,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
         }
         let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
         pairs.sort_by_key(|p| p.1);
-        let goals = pairs.into_iter().map(|p| ((p.0).0, (p.0).0, (p.0).1)).collect();
+        let goals = pairs.into_iter().map(|p| ((p.0).0, (p.0).0, (p.0).1, (p.0).1)).collect();
         LinkMinesGameState {
             punter: setup.punter,
             rivers: setup.map.rivers,
@@ -46,7 +46,7 @@ pub struct LinkMinesGameState {
     punter: PunterId,
     rivers: HashSet<River>,
     rivers_graph: Graph,
-    goals: Vec<(SiteId, SiteId, SiteId)>,
+    goals: Vec<(SiteId, SiteId, SiteId, SiteId)>,
     goals_rev: Vec<(SiteId, SiteId)>,
     claimed_rivers: HashSet<River>,
 }
@@ -60,8 +60,9 @@ impl GameState for LinkMinesGameState {
         let mut gcache = Default::default();
         let mut pass = 0;
         while pass < 2 {
-            while let Some((orig_source, source, target)) = self.goals.pop() {
-                debug!(" ;; found current goal: from {} (originally {}) to {}", source, orig_source, target);
+            while let Some((orig_source, source, orig_target, target)) = self.goals.pop() {
+                debug!(" ;; found current goal: from {} (originally {}) to {} (originally {})",
+                       source, orig_source, target, orig_target);
                 let maybe_path = {
                     let claimed_rivers = &self.claimed_rivers;
                     let check_claimed = |(s, t)| !claimed_rivers
@@ -75,16 +76,16 @@ impl GameState for LinkMinesGameState {
                     debug!(" ;; there is a path for goal from {} to {}: {:?}", source, target, path);
                     if let (Some(&ps), Some(&pt)) = (path.get(0), path.get(1)) {
                         let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
-                        self.goals.push((orig_source, pt, target));
+                        self.goals.push((orig_target, target, orig_source, pt));
                         return Ok((move_, self));
                     }
                 }
                 // path is done, revert it for the future
-                debug!(" ;; reverting path from {} to {}", orig_source, target);
-                self.goals_rev.push((orig_source, target));
+                debug!(" ;; reverting path from {} to {}", orig_source, orig_target);
+                self.goals_rev.push((orig_source, orig_target));
             }
             // all mines are connected somehow, try again
-            let iter = self.goals_rev.drain(..).map(|(s, t)| (s, s, t));
+            let iter = self.goals_rev.drain(..).map(|(s, t)| (s, s, t, t));
             self.goals.extend(iter);
             pass += 1;
         }
