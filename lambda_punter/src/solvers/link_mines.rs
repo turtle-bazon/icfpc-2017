@@ -1,4 +1,5 @@
 use std::cmp::{min, max};
+use std::ops::{Deref, DerefMut};
 use std::collections::{HashMap, HashSet};
 
 use super::super::types::{PunterId, SiteId};
@@ -67,12 +68,14 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
             rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
             goals: goals,
-            claimed_rivers: HashMap::new(),
+            claimed_rivers: ClaimedRivers::new(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
         }
     }
 }
+
+struct ClaimedRivers(HashMap<River, PunterId>);
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkMinesGameState {
@@ -80,7 +83,7 @@ pub struct LinkMinesGameState {
     rivers: HashSet<River>,
     rivers_graph: Graph,
     goals: Vec<(SiteId, SiteId, SiteId, SiteId)>,
-    claimed_rivers: HashMap<River, PunterId>,
+    claimed_rivers: ClaimedRivers,
     futures: Option<Vec<Future>>,
     mines_connected_sites: HashSet<SiteId>,
 }
@@ -186,5 +189,41 @@ impl LinkMinesGameState {
             .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, });
 
         self.rivers_graph.shortest_path(source, target, gcache, probe_claimed)
+    }
+}
+
+impl ClaimedRivers {
+    fn new() -> ClaimedRivers {
+        ClaimedRivers(HashMap::new())
+    }
+}
+
+impl Deref for ClaimedRivers {
+    type Target = HashMap<River, PunterId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ClaimedRivers {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+use serde::{ser, de};
+
+impl ser::Serialize for ClaimedRivers  {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ser::Serializer {
+        let vec: Vec<_> = self.iter().collect();
+        vec.serialize(serializer)
+    }
+}
+
+impl<'de> de::Deserialize<'de> for ClaimedRivers {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: de::Deserializer<'de> {
+        let vec: Vec<(River, PunterId)> = de::Deserialize::deserialize(deserializer)?;
+        Ok(ClaimedRivers(vec.into_iter().collect()))
     }
 }
