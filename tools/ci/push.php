@@ -7,6 +7,7 @@ function buildBranch($newRef) {
   $repoUrl = Config::$REPO_URL;
 
   $refTarget = $newRef['target'];
+  $newRefName = $newRef['name'];
   $refHead = $refTarget['hash'];
   $refMessage = $refTarget['message'];
   $refMessageLines = explode("\n", $refMessage);
@@ -91,7 +92,7 @@ function buildTag($newRef) {
       }
     }
 
-    $submissionFile = 'submissions/' . $newRefName . '_' $refHead . '.tar.gz';
+    $submissionFile = 'submissions/' . $newRefName . '_' . (new DateTime())->format('Y-m-d_His') . '.tar.gz';
     file_put_contents('./' . $submissionFile, $submissionData);
     $submissionHash = md5_file($submissionFile);
     $statusMessage = "https://icfpc.gnoll.tech/{$submissionFile} md5: {$submissionHash}\n";
