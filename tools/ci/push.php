@@ -91,7 +91,7 @@ function buildTag($newRef) {
       }
     }
 
-    $submissionFile = 'submissions/' . $newRefName . '_' $refHead . '.tar.gz';
+    $submissionFile = 'submissions/' . $newRefName . '_' . (new DateTime())->format('Y-m-d_His') . '.tar.gz';
     file_put_contents('./' . $submissionFile, $submissionData);
     $submissionHash = md5_file($submissionFile);
     $statusMessage = "https://icfpc.gnoll.tech/{$submissionFile} md5: {$submissionHash}\n";
