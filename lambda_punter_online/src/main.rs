@@ -140,6 +140,8 @@ fn run() -> Result<(), Error> {
     let mut slaves = Vec::new();
     let mut slave_id_counter = 0;
     let mut rng = rand::thread_rng();
+    let mut total_wins = 0;
+    let mut total_loses = 0;
     while games_played < total_games {
         while slaves.len() < slaves_count {
             let tx = tx.clone();
@@ -186,13 +188,30 @@ fn run() -> Result<(), Error> {
             match rx.recv().unwrap() {
                 Ok((slave_id, port, my_punter, scores)) => {
                     println!("SUCCESS for game port {}:", port);
+                    let mut best = None;
                     for score in scores {
                         println!("  Punter: {}{}, score: {}",
                                  score.punter,
                                  if score.punter == my_punter { " (it's me)" } else { "" },
                                  score.score);
+                        best = if let Some((best_score, best_punter)) = best {
+                            if score.score > best_score {
+                                Some((score.score, score.punter))
+                            } else {
+                                Some((best_score, best_punter))
+                            }
+                        } else {
+                            Some((score.score, score.punter))
+                        }
                     }
                     games_played += 1;
+                    if let Some((_, best_punter)) = best {
+                        if best_punter == my_punter {
+                            total_wins += 1;
+                        } else {
+                            total_loses += 1;
+                        }
+                    }
                     slave_id
                 },
                 Err((slave_id, port, err)) => {
@@ -204,6 +223,9 @@ fn run() -> Result<(), Error> {
         let (_, slave) = slaves.swap_remove(slave_i);
         let () = slave.join().map_err(Error::GameThreadJoin)?;
     }
+
+    println!(" == OVERALL GAMES STAT: {} wins / {} loses ({}% winrate) == ",
+             total_wins, total_loses, total_wins as f64 * 100.0 / total_games as f64);
 
     Ok(())
 }
