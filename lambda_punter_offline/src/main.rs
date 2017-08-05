@@ -62,8 +62,8 @@ fn run() -> Result<(), Error> {
         debug!("using solvers::link_mines");
         proceed_with_solver(hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
     } else {
-        debug!("using default solvers::nearest");
-        proceed_with_solver(hello_name, solvers::nearest::NearestGameStateBuilder, Error::NearestSolver)
+        debug!("using solvers::link_mines");
+        proceed_with_solver(hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
     }
 }
 
