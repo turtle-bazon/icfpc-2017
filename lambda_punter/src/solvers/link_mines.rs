@@ -62,6 +62,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
             goals_rev: Vec::new(),
             claimed_rivers: HashSet::new(),
             futures: futures,
+            mines_connected_sites: HashSet::new(),
         }
     }
 }
@@ -75,6 +76,7 @@ pub struct LinkMinesGameState {
     goals_rev: Vec<(SiteId, SiteId)>,
     claimed_rivers: HashSet<River>,
     futures: Option<Vec<Future>>,
+    mines_connected_sites: HashSet<SiteId>,
 }
 
 impl GameState for LinkMinesGameState {
@@ -103,6 +105,8 @@ impl GameState for LinkMinesGameState {
                     if let (Some(&ps), Some(&pt)) = (path.get(0), path.get(1)) {
                         let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
                         self.goals.push((orig_target, target, orig_source, pt));
+                        self.mines_connected_sites.insert(ps);
+                        self.mines_connected_sites.insert(pt);
                         return Ok((move_, self));
                     }
                 }
@@ -120,8 +124,23 @@ impl GameState for LinkMinesGameState {
         let mut maybe_move = None;
         for river in self.rivers.iter() {
             if !self.claimed_rivers.contains(river) {
-                maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: river.target, });
-                break;
+                let claimed_rivers = &self.claimed_rivers;
+                let check_claimed = |(s, t)| !claimed_rivers
+                    .contains(&River {
+                        source: min(s, t),
+                        target: max(s, t),
+                    });
+                for &mine_site in self.mines_connected_sites.iter() {
+                    if self.rivers_graph.shortest_path(river.source, mine_site, &mut gcache, &check_claimed).is_some() ||
+                        self.rivers_graph.shortest_path(river.target, mine_site, &mut gcache, &check_claimed).is_some()
+                    {
+                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: river.target, });
+                        break;
+                    }
+                }
+                if maybe_move.is_some() {
+                    break;
+                }
             }
         }
         if let Some(move_) = maybe_move {
