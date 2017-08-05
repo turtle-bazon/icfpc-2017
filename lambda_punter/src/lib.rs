@@ -11,5 +11,6 @@ pub mod proto;
 pub mod game;
 pub mod chat;
 pub mod client;
+pub mod graph;
 
 pub mod solvers;

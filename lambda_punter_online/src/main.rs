@@ -6,6 +6,7 @@ extern crate lambda_punter;
 use std::process;
 use clap::{Arg, AppSettings, SubCommand};
 use lambda_punter::{client, game, solvers};
+use lambda_punter::game::GameState;
 
 fn main() {
     env_logger::init().unwrap();
@@ -26,6 +27,7 @@ enum Error {
     NoSubcommandProvided,
     AlwaysPassSolver(client::Error<()>),
     NearestSolver(client::Error<()>),
+    LinkMinesSolver(client::Error<()>),
 }
 
 fn run() -> Result<(), Error> {
@@ -61,6 +63,9 @@ fn run() -> Result<(), Error> {
         .subcommand(SubCommand::with_name("nearest")
                     .display_order(2)
                     .about("solvers::nearest"))
+        .subcommand(SubCommand::with_name("link_mines")
+                    .display_order(3)
+                    .about("solvers::link_mines"))
         .get_matches();
 
     let server_host = matches.value_of("server-host")
@@ -77,6 +82,9 @@ fn run() -> Result<(), Error> {
     } else if let Some(..) = matches.subcommand_matches("nearest") {
         debug!("using solvers::nearest");
         proceed_with_solver(server_host, server_port, hello_name, solvers::nearest::NearestGameStateBuilder, Error::NearestSolver)
+    } else if let Some(..) = matches.subcommand_matches("link_mines") {
+        debug!("using solvers::link_mines");
+        proceed_with_solver(server_host, server_port, hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
     } else {
         Err(Error::NoSubcommandProvided)
     }
@@ -90,15 +98,18 @@ fn proceed_with_solver<GB, EF>(
     err_map: EF)
     -> Result<(), Error>
     where GB: game::GameStateBuilder,
-          EF: Fn(client::Error<<GB::GameState as game::GameState>::Error>) -> Error
+          EF: Fn(client::Error<<GB::GameState as GameState>::Error>) -> Error
 {
-    let (scores, _game_state) = client::run_network((server_host, server_port), hello_name, gs_builder)
+    let (scores, game_state) = client::run_network((server_host, server_port), hello_name, gs_builder)
         .map_err(err_map)?;
     info!("all done");
 
     println!("Game over! Total server scores:");
     for score in scores {
-        println!("  Punter: {}, score: {}", score.punter, score.score);
+        println!("  Punter: {}{}, score: {}",
+                 score.punter,
+                 if game_state.get_punter() == score.punter { " (it's me)" } else { "" },
+                 score.score);
     }
 
     Ok(())

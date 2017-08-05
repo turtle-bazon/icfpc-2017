@@ -26,7 +26,7 @@ pub enum Rep {
     },
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
 pub struct Future {
     pub source: SiteId,
     pub target: SiteId,
@@ -54,7 +54,7 @@ pub enum Move {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Score {
     pub punter: PunterId,
-    pub score: usize,
+    pub score: isize,
 }
 
 #[derive(Debug)]
@@ -252,14 +252,14 @@ mod test {
 
     #[test]
     fn proto_stop() {
-        let object = Rep::from_json::<()>("{\"stop\":{\"moves\":[{\"claim\":{\"punter\":0,\"source\":5,\"target\":7}},{\"claim\":{\"punter\":1,\"source\":7,\"target\":1}}], \"scores\":[{\"punter\":0,\"score\":6},{\"punter\":1,\"score\":6}]}}").unwrap().0;
+        let object = Rep::from_json::<()>("{\"stop\":{\"moves\":[{\"claim\":{\"punter\":0,\"source\":5,\"target\":7}},{\"claim\":{\"punter\":1,\"source\":7,\"target\":1}}], \"scores\":[{\"punter\":0,\"score\":-6},{\"punter\":1,\"score\":6}]}}").unwrap().0;
         let result = Rep::Stop {
             moves: vec![
                 Move::Claim { punter: 0, source: 5, target: 7, },
                 Move::Claim { punter: 1, source: 7, target: 1, },
                 ],
             scores: vec![
-                Score { punter: 0, score: 6 },
+                Score { punter: 0, score: -6 },
                 Score { punter: 1, score: 6 },
                 ],
         };
