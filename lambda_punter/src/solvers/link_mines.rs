@@ -17,12 +17,24 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
         let mut gcache = Default::default();
 
         let mut mine_pairs = HashMap::new();
-        for &mine_a in setup.map.mines.iter() {
-            for &mine_b in setup.map.mines.iter() {
-                let key = (min(mine_a, mine_b), max(mine_a, mine_b));
-                if (mine_a != mine_b) && !mine_pairs.contains_key(&key) {
+        if setup.map.mines.len() < 2 {
+            if let Some(&mine) = setup.map.mines.iter().next() {
+                for (&site, _) in setup.map.sites.iter() {
+                    let key = (min(mine, site), max(mine, site));
                     if let Some(path) = rivers_graph.shortest_path(key.0, key.1, &mut gcache, |_| true) {
                         mine_pairs.insert(key, path.len());
+                        break;
+                    }
+                }
+            }
+        } else {
+            for &mine_a in setup.map.mines.iter() {
+                for &mine_b in setup.map.mines.iter() {
+                    let key = (min(mine_a, mine_b), max(mine_a, mine_b));
+                    if (mine_a != mine_b) && !mine_pairs.contains_key(&key) {
+                        if let Some(path) = rivers_graph.shortest_path(key.0, key.1, &mut gcache, |_| true) {
+                            mine_pairs.insert(key, path.len());
+                        }
                     }
                 }
             }
