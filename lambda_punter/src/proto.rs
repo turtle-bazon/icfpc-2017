@@ -26,7 +26,7 @@ pub enum Rep {
     },
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
 pub struct Future {
     pub source: SiteId,
     pub target: SiteId,

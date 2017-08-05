@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::super::types::{PunterId, SiteId};
 use super::super::map::River;
-use super::super::proto::{Move, Setup};
+use super::super::proto::{Move, Setup, Future};
 use super::super::game::{GameState, GameStateBuilder};
 use super::super::graph::Graph;
 
@@ -29,7 +29,18 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
         }
         let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
         pairs.sort_by_key(|p| p.1);
+        let futures =
+            if let Some(&((source, target), _)) = pairs.last() {
+                if setup.settings.futures {
+                    Some(vec![Future { source: source, target: target, }])
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
         let goals = pairs.into_iter().map(|p| ((p.0).0, (p.0).0, (p.0).1, (p.0).1)).collect();
+
         LinkMinesGameState {
             punter: setup.punter,
             rivers: setup.map.rivers,
@@ -37,6 +48,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
             goals: goals,
             goals_rev: Vec::new(),
             claimed_rivers: HashSet::new(),
+            futures: futures,
         }
     }
 }
@@ -49,6 +61,7 @@ pub struct LinkMinesGameState {
     goals: Vec<(SiteId, SiteId, SiteId, SiteId)>,
     goals_rev: Vec<(SiteId, SiteId)>,
     claimed_rivers: HashSet<River>,
+    futures: Option<Vec<Future>>,
 }
 
 impl GameState for LinkMinesGameState {
@@ -112,6 +125,10 @@ impl GameState for LinkMinesGameState {
 
     fn get_punter(&self) -> PunterId {
         self.punter
+    }
+
+    fn get_futures(&mut self) -> Option<Vec<Future>> {
+        self.futures.take()
     }
 }
 
