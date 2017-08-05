@@ -121,7 +121,8 @@ impl PartialOrd for PQNode {
 
 #[cfg(test)]
 mod test {
-    use super::Graph;
+    use super::super::types::SiteId;
+    use super::{Graph, EdgeAttr};
 
     #[test]
     fn shortest_path() {
@@ -133,5 +134,27 @@ mod test {
         let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only(1, 4, &mut cache), Some(path14));
         let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path_only(1, 5, &mut cache), Some(path15));
         let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path_only(0, 4, &mut cache), Some(path04));
+    }
+
+    #[test]
+    fn shortest_path_with_custom_costs() {
+        let mut cache = Default::default();
+        let graph = Graph::from_iter(
+            [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
+                .iter()
+                .cloned());
+        fn edge_probe((s, t): (SiteId, SiteId)) -> EdgeAttr {
+            if ((s == 1) && (t == 3)) || ((s == 3) && (t == 1)) {
+                EdgeAttr::Accessible { edge_cost: 3, }
+            } else if ((s == 0) && (t == 1)) || ((s == 1) && (t == 0)) {
+                EdgeAttr::Blocked
+            } else {
+                EdgeAttr::Accessible { edge_cost: 1, }
+            }
+        }
+
+        let path14: &[_] = &[1, 2, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache, edge_probe), Some(path14));
+        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache, edge_probe), Some(path15));
+        let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache, edge_probe), Some(path04));
     }
 }
