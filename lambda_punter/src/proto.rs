@@ -92,7 +92,11 @@ impl Rep {
         match serde_json::from_str::<Value>(s).map_err(Error::Json)? {
             Value::Object(mut map) => {
                 let maybe_state = if let Some(value) = map.remove("state") {
-                    Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
+                    if map.contains_key("move") || map.contains_key("stop") {
+                        Some(serde_json::from_value::<S>(value).map_err(Error::Json)?)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };
