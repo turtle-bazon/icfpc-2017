@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet, BinaryHeap};
 use super::types::SiteId;
 use super::map::Map;
 
+#[derive(Serialize, Deserialize)]
 pub struct Graph {
     neighs: HashMap<SiteId, HashSet<SiteId>>,
 }
@@ -47,7 +48,9 @@ impl Graph {
         }
     }
 
-    pub fn shortest_path<'a>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
+    pub fn shortest_path<'a, F>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache, mut accessible: F) -> Option<&'a [SiteId]>
+        where F: FnMut((SiteId, SiteId)) -> bool
+    {
         cache.clear();
         cache.path_buf.push((source, 0));
         cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, });
@@ -65,6 +68,9 @@ impl Graph {
             if let Some(neighs) = self.neighs.get(&site) {
                 for &reachable_site in neighs.iter() {
                     if cache.visited.contains(&reachable_site) {
+                        continue;
+                    }
+                    if !accessible((site, reachable_site)) {
                         continue;
                     }
                     cache.path_buf.push((reachable_site, phead));
@@ -108,8 +114,8 @@ mod test {
             [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
                 .iter()
                 .cloned());
-        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache), Some(path14));
-        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache), Some(path15));
-        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache), Some(path04));
+        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache, |_| true), Some(path14));
+        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache, |_| true), Some(path15));
+        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache, |_| true), Some(path04));
     }
 }
