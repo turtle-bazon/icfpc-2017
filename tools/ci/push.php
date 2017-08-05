@@ -73,6 +73,16 @@ foreach($changes as $change) {
   $newRef = $change['new'];
   $newRefType = $newRef['type'];
   $newRefName = $newRef['name'];
+  $refTarget = $newRef['target'];
+  $refHead = $refTarget['hash'];
+
+  $lockFile = './lock/' . $newRefName . '-' . $refHead;
+  sleep(2); // Thin and shiny sleep-synchonization %)
+  if (file_exists($lockFile)) {
+    echo "{$newRefName} - {$refHead}: duplicate webhook detected. Skipping\n";
+    continue;
+  }
+  touch($lockFile);
 
   switch ($newRefType) {
     case 'branch':
