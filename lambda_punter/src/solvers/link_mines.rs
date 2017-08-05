@@ -120,37 +120,33 @@ impl GameState for LinkMinesGameState {
             }
 
             // all current goals are reached for now, let's choose a free river connected to our already existing path
-            let mut maybe_goal = None;
+            let mut new_goal = None;
             for river in self.rivers.iter() {
                 if !self.claimed_rivers.contains_key(river) {
                     for &mine_site in self.mines_connected_sites.iter() {
-                        if let Some(path) = self.shortest_path(river.source, mine_site, &mut gcache) {
-                            let journey_start = mine_site;
-                            let journey_end = match path.get(1) {
-                                Some(&p) if p == river.target =>
-                                    river.source,
-                                _ =>
-                                    river.target,
-                            };
-                            debug!(" ;; fallback: new goal is chosen: from {} (as a part of mine path) to {}", journey_start, journey_end);
-                            maybe_goal = Some((journey_start, journey_end));
+                        if self.shortest_path(river.source, mine_site, &mut gcache).is_some() {
+                            debug!(" ;; fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
+                            let move_ = Move::Claim { punter: self.punter, source: river.source, target: river.target, };
+                            new_goal = Some((move_, mine_site, river.source, river.target));
                             break;
                         }
                     }
                 }
-                if maybe_goal.is_some() {
+                if new_goal.is_some() {
                     break;
                 }
             }
 
-            if let Some((source, target)) = maybe_goal {
-                // new goal has been found
-                self.goals.push((source, source, target, target));
-                continue;
+            return Ok(if let Some((move_, ms, rs, rt)) = new_goal {
+                // new goal is choosen
+                self.goals.push((ms, ms, rs, rs));
+                self.mines_connected_sites.insert(rs);
+                self.mines_connected_sites.insert(rt);
+                (move_, self)
             } else {
                 // no new goals, just pass for now
-                return Ok((Move::Pass { punter: self.punter, }, self));
-            }
+                (Move::Pass { punter: self.punter, }, self)
+            });
         }
     }
 
