@@ -131,11 +131,10 @@ impl GameState for LinkMinesGameState {
                         target: max(s, t),
                     });
                 for &mine_site in self.mines_connected_sites.iter() {
-                    if self.rivers_graph.shortest_path(river.source, mine_site, &mut gcache, &check_claimed).is_some() ||
-                        self.rivers_graph.shortest_path(river.target, mine_site, &mut gcache, &check_claimed).is_some()
-                    {
-                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: river.target, });
-                        break;
+                    if self.rivers_graph.shortest_path(river.source, mine_site, &mut gcache, &check_claimed).is_some() {
+                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.source, target: mine_site, });
+                    } else if self.rivers_graph.shortest_path(river.target, mine_site, &mut gcache, &check_claimed).is_some() {
+                        maybe_move = Some(Move::Claim { punter: self.punter, source: river.target, target: mine_site, });
                     }
                 }
                 if maybe_move.is_some() {
