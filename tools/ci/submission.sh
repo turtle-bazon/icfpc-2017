@@ -25,11 +25,21 @@ cd $TEMP_DIR
 tar xf build.tar.gz
 rm -f build.tar.gz
 
-./build.sh 2>&1
+OUTPUT_DIR=`mktemp -d`
+./submission.sh $OUTPUT_DIR/submission 2>&1
 RETVAL=$?
+
+if [ $RETVAL -eq 0 ]; then
+    cd $OUTPUT_DIR/submission
+    tar cfz ../submission.tar.gz .
+
+    echo __SUBMISSION_DATA__
+    base64 -w 0 $OUTPUT_DIR/submission.tar.gz
+fi
 
 cd /
 rm -rf $TEMP_DIR
+rm -rf $OUTPUT_DIR
 
 exit $RETVAL
 EOF
