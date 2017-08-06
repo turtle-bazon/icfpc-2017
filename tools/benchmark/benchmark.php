@@ -25,10 +25,13 @@ function parseArgs() {
     ->isa('Number')
     ->defaultValue(10);
 
-  $specs// tick use required as of PHP 4.3.0
+  $specs
     ->add('p|parallel?', 'Number of concurrent running games.')
     ->isa('Number')
     ->defaultValue(2);
+
+  $specs
+    ->add('e|eager', 'Try to avoid player named "eager punter"');
 
   $specs
     ->add('help', 'Show usage help');
@@ -210,13 +213,13 @@ function reportFinalize(&$report) {
   }
 }
 
-function allocateNextGame(&$report, &$srvList) {
+function allocateNextGame(&$report, &$srvList, $avoidEager) {
   foreach($report['maps'] as $mapName => &$mapInfo) {
     if ($mapInfo['roundsLeft'] <= 0) {
       continue;
     }
 
-    $srvSlot = srvAllocateSlot($srvList, $mapName);
+    $srvSlot = srvAllocateSlot($srvList, $mapName, $avoidEager);
 
     /* No free server for the map */
     if ($srvSlot === false) {
@@ -301,7 +304,7 @@ $status = srvFetchStatus();
 $srvList = srvPrepareList($status['servers']);
 while ($keepGoing && !reportReady($report)) {
   while (count($games) < $result->parallel) {
-    $game = allocateNextGame($report, $srvList);
+    $game = allocateNextGame($report, $srvList, $result->eager);
     if ($game === false) {
       break;
     }
