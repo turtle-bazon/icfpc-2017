@@ -166,6 +166,14 @@ impl GameState for GNGameState {
 
     fn stop(mut self, moves: Vec<Move>) -> Result<Self, Self::Error> {
         self.update_moves(moves);
+        debug!("STOP command invocked");
+        if let Some(ref futures) = self.futures {
+            let mut gcache = Default::default();
+            for &Future { source, target, } in futures.iter() {
+                let completed = self.shortest_path(source, target, &mut gcache).is_some();
+                debug!("future from {} to {}: {}", source, target, if completed { "SUCCESS" } else { "FAILED" });
+            }
+        }
         Ok(self)
     }
 
@@ -174,7 +182,7 @@ impl GameState for GNGameState {
     }
 
     fn get_futures(&mut self) -> Option<Vec<Future>> {
-        self.futures.take()
+        self.futures.clone()
     }
 }
 
