@@ -31,6 +31,11 @@ function parseArgs() {
     ->defaultValue(2);
 
   $specs
+    ->add('l|logLoose?', 'Location for loose games logs.')
+    ->isa('String')
+    ->defaultValue('./benchmark/loose');
+
+  $specs
     ->add('e|eager', 'Try to avoid player named "eager punter"');
 
   $specs
@@ -141,7 +146,7 @@ function parseGameLog($log) {
   return [$myPunterID, $score];
 }
 
-function reportUpdateGame(&$report, $game) {
+function reportUpdateGame(&$report, $game, $looseLog) {
   echo "[" . $game['pid'] . "] Game finished: " . $game['status']
            . (reportCheckIsEagerGame($game) ? " [ EAGER PUNTER ]" : "");
 
@@ -181,6 +186,14 @@ function reportUpdateGame(&$report, $game) {
 
     echo ": Score: " . $game['score'] . ", meta-score: " . $game['metaScore'] . " -> " . $game['result'] . "\n";
     $report['maps'][$map]['games'][] = $game;
+
+    if ($game['result'] == 'loose') {
+      @mkdir($looseLog, 0777, true);
+      $looseLogFilename = 'loose-log-{$map}-'
+                        . ((new DateTime())->format('Y-m-d_h_m_i'))
+                        . '.log';
+      copy($game['output'], $looseLog . '/' . $looseLogFilename);
+    }
   }
 
   unlink($game['output']);
@@ -325,7 +338,7 @@ while ($keepGoing && !reportReady($report)) {
 
       $game = $games[$chPID];
       $game['status'] = ($status == 0) ? 'ok' : 'error';
-      reportUpdateGame($report, $game);
+      reportUpdateGame($report, $game, $result->logLoose);
       unset($games[$chPID]);
     }
 
