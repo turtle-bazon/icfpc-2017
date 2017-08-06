@@ -97,6 +97,47 @@ impl Graph {
         None
     }
 
+    pub fn longest_jouney_from<'a>(&self, source: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
+        cache.clear();
+        cache.path_buf.push((source, 0));
+        cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, });
+        let mut best = None;
+        while let Some(PQNode { site, cost: current_cost, phead, }) = cache.pqueue.pop() {
+            best = match best {
+                Some((best_phead, best_cost)) if current_cost < best_cost =>
+                    Some((best_phead, best_cost)),
+                _ =>
+                    Some((phead, current_cost)),
+            };
+            cache.visited.insert(site);
+            if let Some(neighs) = self.neighs.get(&site) {
+                for &reachable_site in neighs.iter() {
+                    if cache.visited.contains(&reachable_site) {
+                        continue;
+                    }
+                    cache.path_buf.push((reachable_site, phead));
+                    cache.pqueue.push(PQNode {
+                        site: reachable_site,
+                        cost: current_cost + 1,
+                        phead: cache.path_buf.len(),
+                    });
+                }
+            }
+        }
+
+        if let Some((mut phead, _)) = best {
+            while phead != 0 {
+                let (site_hop, next_phead) = cache.path_buf[phead - 1];
+                cache.path.push(site_hop);
+                phead = next_phead;
+            }
+            cache.path.reverse();
+            Some(&cache.path)
+        } else {
+            None
+        }
+    }
+
     // The Girvan-Newman Algorithm
     pub fn rivers_betweenness(&self, cache: &mut GraphCache) -> HashMap<River, f64> {
         let mut rivers = HashMap::new();
@@ -297,6 +338,13 @@ mod test {
                                    ((3, 6), 4.5),
                                    ((4, 5), 1.5),
                                    ((5, 6), 1.5)]);
+    }
+
+    #[test]
+    fn longest_jouney() {
+        let mut cache = Default::default();
+        let graph = sample_map();
+        assert_eq!(graph.longest_jouney_from(6, &mut cache).and_then(|p| p.last()), Some(&2));
     }
 
     #[test]
