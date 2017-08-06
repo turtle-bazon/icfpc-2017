@@ -1,6 +1,6 @@
 [package]
 name = "lambda_punter_online"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Alexey Voznyuk <me@swizard.info>"]
 
 [dependencies]

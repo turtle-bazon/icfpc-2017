@@ -150,6 +150,7 @@ fn run() -> Result<(), Error> {
     let mut rng = rand::thread_rng();
     let mut total_wins = 0;
     let mut total_loses = 0;
+    let mut loses = Vec::new();
 
     let mut ports_done: Vec<_> = (server_start_port .. server_end_port + 1).collect();
     let mut ports_avail = Vec::with_capacity(ports_done.len());
@@ -215,7 +216,7 @@ fn run() -> Result<(), Error> {
                 Ok((slave_id, port, my_punter, scores)) => {
                     println!("SUCCESS for game port {}:", port);
                     let mut best = None;
-                    for score in scores {
+                    for score in scores.iter() {
                         println!("  Punter: {}{}, score: {}",
                                  score.punter,
                                  if score.punter == my_punter { " (it's me)" } else { "" },
@@ -236,6 +237,7 @@ fn run() -> Result<(), Error> {
                             total_wins += 1;
                         } else {
                             total_loses += 1;
+                            loses.push((port, my_punter, scores));
                         }
                     }
                     (slave_id, port)
@@ -253,6 +255,10 @@ fn run() -> Result<(), Error> {
 
     println!(" == OVERALL GAMES STAT: {} wins / {} loses ({}% winrate) == ",
              total_wins, total_loses, total_wins as f64 * 100.0 / total_games as f64);
+    println!("My loses:");
+    for (port, my_punter, scores) in loses {
+        println!(" * Port {}, punter: {}, scores: {:?}", port, my_punter, scores);
+    }
 
     Ok(())
 }
