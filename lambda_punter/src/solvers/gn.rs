@@ -1,6 +1,6 @@
 use std::cmp::{min, max};
 use std::collections::{HashMap, HashSet};
-use rand::Rng;
+use rand::{self, Rng};
 
 use super::super::types::{PunterId, SiteId};
 use super::super::map::{River, RiversIndex};
@@ -24,16 +24,18 @@ impl GameStateBuilder for GNGameStateBuilder {
 
         let mut mine_pairs = HashMap::new();
         if setup.map.mines.len() < 2 {
+            debug!("there is only one mine on this map");
             if let Some(&mine) = setup.map.mines.iter().next() {
-                for &site in setup.map.sites.iter() {
-                    let key = (min(mine, site), max(mine, site));
-                    if let Some(path) = rivers_graph.shortest_path_only(key.0, key.1, &mut gcache) {
+                if let Some(path) = rivers_graph.longest_jouney_from(mine, &mut gcache) {
+                    if let Some(&longest_jouney_site) = path.last() {
+                        debug!("longest jouney choosen from mine {} to {}", mine, longest_jouney_site);
+                        let key = (min(mine, longest_jouney_site), max(mine, longest_jouney_site));
                         mine_pairs.insert(key, path.to_owned());
-                        break;
                     }
                 }
             }
         } else {
+            debug!("there are {} mines on this map", setup.map.mines.len());
             for &mine_a in setup.map.mines.iter() {
                 for &mine_b in setup.map.mines.iter() {
                     let key = (min(mine_a, mine_b), max(mine_a, mine_b));
@@ -45,8 +47,11 @@ impl GameStateBuilder for GNGameStateBuilder {
                 }
             }
         }
+
         let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
         pairs.sort_by_key(|p| (p.1).len());
+        debug!("initially choosen {} goals", pairs.len());
+
         let futures =
             if let Some(&(_, ref path)) = pairs.last() {
                 let len = path.len();
@@ -54,10 +59,8 @@ impl GameStateBuilder for GNGameStateBuilder {
                     if let (Some(&s), Some(&sp), Some(&tp), Some(&t)) =
                         (path.get(0), path.get(1), path.get(len - 2), path.get(len - 1))
                     {
-                        debug!(" ;; declaring direct future: from {} to {}, and reverse: from {} to {}",
-                               s, tp, t, sp);
-                        Some(vec![Future { source: s, target: tp, },
-                                  Future { source: t, target: sp, }])
+                        debug!("declaring direct future: from {} to {} and reverse one: from {} to {}", s, tp, t, sp);
+                        Some(vec![Future { source: s, target: tp, }, Future { source: t, target: sp, }])
                     } else {
                         None
                     }
@@ -67,16 +70,16 @@ impl GameStateBuilder for GNGameStateBuilder {
             } else {
                 None
             };
-        let goals = pairs.into_iter().map(|p| ((p.0).0, (p.0).0, (p.0).1, (p.0).1)).collect();
 
         GNGameState {
             punter: setup.punter,
             rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
-            goals: goals,
+            goals: pairs.into_iter().map(|p| ((p.0).0, (p.0).1)).collect(),
             claimed_rivers: ClaimedRivers::new(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
+            rivers_bw: rivers_bw,
         }
     }
 }
@@ -88,10 +91,11 @@ pub struct GNGameState {
     punter: PunterId,
     rivers: Vec<River>,
     rivers_graph: Graph,
-    goals: Vec<(SiteId, SiteId, SiteId, SiteId)>, // TODO: use here plain (source, target) -- instead A* should use already build path chunks
+    goals: Vec<(SiteId, SiteId)>,
     claimed_rivers: ClaimedRivers,
     futures: Option<Vec<Future>>,
     mines_connected_sites: HashSet<SiteId>,
+    rivers_bw: RiversIndex<f64>,
 }
 
 impl GameState for GNGameState {
@@ -101,40 +105,40 @@ impl GameState for GNGameState {
         self.update_moves(moves);
         let mut gcache = Default::default();
         loop {
-            while let Some((orig_source, source, orig_target, target)) = self.goals.pop() {
-                debug!(" ;; found current goal: from {} (originally {}) to {} (originally {})",
-                       source, orig_source, target, orig_target);
+            while let Some((source, target)) = self.goals.pop() {
+                debug!("found current goal: from {} to {}", source, target);
                 let maybe_path = self.shortest_path(source, target, &mut gcache);
                 if let Some(path) = maybe_path {
-                    debug!(" ;; there is a path for goal from {} to {}: {:?}", source, target, path);
+                    debug!("there is a path for goal from {} to {}: {:?}", source, target, path);
                     let mut offset = 0;
                     while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
                         let wanted_river = River::new(ps, pt);
                         if self.claimed_rivers.get(&wanted_river).map(|&p| p == self.punter).unwrap_or(false) {
                             // it is already mine river, skip it
-                            debug!(" ;; skipping already mine river from {} to {}", ps, pt);
+                            debug!("skipping already claimed river from {} to {}", ps, pt);
                             offset += 1;
                             continue;
                         } else {
                             // not yet mine river
                             let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
-                            self.goals.push((orig_target, target, orig_source, pt));
+                            self.goals.push((target, source));
                             self.mines_connected_sites.insert(ps);
                             self.mines_connected_sites.insert(pt);
                             return Ok((move_, self));
                         }
                     }
                 }
-                debug!(" ;; no path from {} to {} for a goal", orig_source, orig_target);
+                debug!("no path from {} to {} for a goal: probably blocked by our foes", source, target);
             }
 
-            // all current goals are reached for now, let's choose a free river connected to our already existing path
+            // all current goals are reached for now, let's choose a random free river connected to our already existing path
             let mut new_goal = None;
+            rand::thread_rng().shuffle(&mut self.rivers);
             for river in self.rivers.iter() {
                 if !self.claimed_rivers.contains_key(river) {
                     for &mine_site in self.mines_connected_sites.iter() {
                         if self.shortest_path(river.source, mine_site, &mut gcache).is_some() {
-                            debug!(" ;; fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
+                            debug!("fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
                             let move_ = Move::Claim { punter: self.punter, source: river.source, target: river.target, };
                             new_goal = Some((move_, mine_site, river.source, river.target));
                             break;
@@ -148,7 +152,7 @@ impl GameState for GNGameState {
 
             return Ok(if let Some((move_, ms, rs, rt)) = new_goal {
                 // new goal is choosen
-                self.goals.push((ms, ms, rs, rs));
+                self.goals.push((ms, rs));
                 self.mines_connected_sites.insert(rs);
                 self.mines_connected_sites.insert(rt);
                 (move_, self)
