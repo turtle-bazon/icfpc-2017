@@ -82,7 +82,7 @@ pub struct LinkMinesGameState {
     punter: PunterId,
     rivers: HashSet<River>,
     rivers_graph: Graph,
-    goals: Vec<(SiteId, SiteId, SiteId, SiteId)>,
+    goals: Vec<(SiteId, SiteId, SiteId, SiteId)>, // TODO: use here plain (source, target) -- instead A* should use already build path chunks
     claimed_rivers: ClaimedRivers,
     futures: Option<Vec<Future>>,
     mines_connected_sites: HashSet<SiteId>,
