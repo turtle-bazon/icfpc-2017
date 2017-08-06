@@ -128,8 +128,9 @@ impl GameState for GNGameState {
                         }
                     }
                 }
-                debug!("no path from {} to {} for a goal: probably blocked by our foes", source, target);
+                debug!("no route from {} to {}, proceeding with next", source, target);
             }
+            debug!("no more goals to reach, choosing a new random one");
 
             // all current goals are reached for now, let's choose a random free river connected to our already existing path
             let mut new_goal = None;
