@@ -1,7 +1,6 @@
 (define-module (lib replay)
   #:use-module (ext-lib pipe)
   #:use-module (ice-9 format)
-  #:use-module (ice-9 match)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 rdelim)
   #:use-module (json)
@@ -13,19 +12,17 @@
   #:use-module (srfi srfi-9)
   #:export (generate-replay))
 
-(define _SERVER_TO_PUNTER_ "S->P")
+(define _SERVER_TO_PUNTER_ "S -> P")
 
-(define _PUNTER_TO_SERVER_ "P->S")
+(define _PUNTER_TO_SERVER_ "P -> S")
 
 (define-record-type replay-context
   (make-replay-context my-id game game-state)
   replay-context?
   (my-id rc-my-id set-rc-my-id!)
   (game rc-game set-rc-game!)
-  (game-state rc-game-state set-rc-game-state!))
-
-(define (handle-p->s rctx jsval)
-  #nil)
+  (game-state rc-game-state set-rc-game-state!)
+  (f-counter rc-fcounter set-rc-fcounter!))
 
 (define (site-by-id sites id)
   (find
@@ -142,11 +139,12 @@
                 gp-footer-strs)
         (gp-data-as-str))))
 
-(define (gp-exec plot-prog)
+(define (gp-exec plot-prog frame-number)
   (let ((w-port (open-output-pipe "gnuplot")))
+    (format w-port "set terminal png size 640, 640~&")
+    (format w-port "set output '/tmp/tri~5,,,'0@a.png~&" frame-number)
     (display plot-prog w-port)
     (when (not (eqv? 0 (status:exit-val (close-pipe w-port))))
-      (flog-msg 'ERROR "Error!!!!!!")
       (throw 'gnuplot-error))))
 
 (define (setup-game rctx jsval)
@@ -156,39 +154,84 @@
          (game-map (transform->game-map (hash-ref jsval "map")))
          (game (make-game punters-count game-map))
          (game-state (make-game-state punters-count)))
-    (with-fluids ((*game* game)
-                  (*game-state* game-state))
-      (apply-claim 0 (make-river 1 2))
-      (apply-claim 0 (make-river 1 7))
-      (apply-claim 0 (make-river 1 3))
-      (apply-claim 0 (make-river 5 7))
-      (apply-claim 0 (make-river 3 4))
-      (apply-claim 0 (make-river 5 4))
-      (apply-claim 1 (make-river 0 1))
-      (apply-claim 1 (make-river 0 7))
-      (apply-claim 1 (make-river 7 6))
-      (apply-claim 1 (make-river 5 6))
-      (apply-claim 1 (make-river 3 5))
-      )
+    (set-rc-fcounter! rctx 0)
     (set-rc-my-id! rctx my-id)
     (set-rc-game! rctx game)
-    (set-rc-game-state! rctx game-state)
-    (gp-exec (to->gnuplot rctx))
-    (flog-msg 'DEBUG "GP2: ~a~&" (to->gnuplot rctx))
-    ))
+    (set-rc-game-state! rctx game-state)))
+
+(define (apply-claim-move move)
+  (apply-claim (hash-ref move "punter")
+               (make-river (hash-ref move "source")
+                           (hash-ref move "target"))))
+
+(define (apply-pass-move move)
+  #nil)
+
+(define (apply-move move)
+  (cond
+   ((hash-ref move "claim") (apply-claim-move (hash-ref move "claim")))
+   ((hash-ref move "pass")  (apply-pass-move  (hash-ref move "pass")))
+   (#t (throw 'illegal-state))))
+
+(define (apply-opponent-moves rctx jsval)
+  (let* ((moves (-> jsval
+                    (hash-ref "move")
+                    (hash-ref "moves")))
+         (game (rc-game rctx))
+         (game-state (rc-game-state rctx))
+         (p-count (game-punters-count game)))
+    (with-fluids ((*game* game)
+                  (*game-state* game-state))
+      (map
+       (lambda (move)
+         (apply-move move))
+       (filter
+        (lambda (move)
+          (let ((cur-punter (hash-ref (cdar (hash-map->list cons move)) "punter")))
+            (not (eq? cur-punter (rc-my-id rctx)))))
+        moves)))))
 
 (define (handle-s->p rctx jsval)
   (cond
-   ((hash-ref jsval "map") (setup-game rctx jsval))))
+   ((hash-ref jsval "map") (setup-game rctx jsval))
+   ((hash-ref jsval "move") (apply-opponent-moves rctx jsval))))
+
+(define (handle-me rctx jsval)
+  #nil)
+
+(define (handle-ready rctx jsval)
+  #nil)
+
+(define (handle-my-moves rctx jsval)
+  (let* ((current-fc (rc-fcounter rctx))
+         (next-fc (+ current-fc 1))
+         (next-next-fc (+ next-fc 1))
+         (game (rc-game rctx))
+         (game-state (rc-game-state rctx)))
+    (gp-exec (to->gnuplot rctx) current-fc)
+    (set-rc-fcounter! rctx next-fc)
+    (with-fluids ((*game* game)
+                  (*game-state* game-state))
+      (cond
+       ((hash-ref jsval "claim") (apply-claim-move (hash-ref jsval "claim")))
+       ((hash-ref jsval "pass")  (apply-pass-move  (hash-ref jsval "pass")))))
+    (gp-exec (to->gnuplot rctx) next-fc)
+    (set-rc-fcounter! rctx next-next-fc)))
+
+(define (handle-p->s rctx jsval)
+  (cond
+   ((hash-ref jsval "me")    (handle-me rctx jsval))
+   ((hash-ref jsval "ready") (handle-ready rctx jsval))
+   (#t (handle-my-moves rctx jsval))))
 
 (define (handle-protocol-message rctx data-type data)
   (let* ((colon-sep (string-index data #\:))
          (msg-len (string->number (substring data 0 colon-sep)))
          (msg (substring data (+ colon-sep 1)))
          (json-data (json-string->scm msg)))
-    (match data-type
-      (_SERVER_TO_PUNTER_ (handle-s->p rctx json-data))
-      (_PUNTER_TO_SERVER_ (handle-p->s rctx json-data)))))
+    (cond
+     ((string=? data-type _SERVER_TO_PUNTER_) (handle-s->p rctx json-data))
+     ((string=? data-type _PUNTER_TO_SERVER_) (handle-p->s rctx json-data)))))
 
 (define (handle-unknown-message rctx data)
   ;; ignore now
@@ -199,10 +242,10 @@
     (when info-sep
       (let ((info-type (string-trim-both (substring line 0 info-sep)))
             (info-data (string-trim-both (substring line (+ info-sep 1)))))
-        (match info-type
-          ((or _SERVER_TO_PUNTER_
-               _PUNTER_TO_SERVER_) (handle-protocol-message rctx info-type info-data))
-          (_ (handle-unknown-message rctx info-data)))))))
+        (cond
+         ((or (string=? info-type _SERVER_TO_PUNTER_)
+              (string=? info-type _PUNTER_TO_SERVER_)) (handle-protocol-message rctx info-type info-data))
+         (#t (handle-unknown-message rctx info-data)))))))
 
 (define (generate-replay replay-file output-dir)
   (let ((rctx (make-replay-context -1 #nil #nil)))

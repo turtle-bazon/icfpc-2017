@@ -1,6 +1,7 @@
 (define-module (lib game)
   #:use-module (ext-lib pipe)  
   #:use-module (lib game-data)
+  #:use-module (lib log)
   #:use-module (srfi srfi-1)
   #:export (*game*
             *game-state*
