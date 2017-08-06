@@ -72,6 +72,7 @@ pub enum Error {
 enum ServerMove {
     claim { punter: PunterId, source: SiteId, target: SiteId, },
     pass { punter: PunterId, },
+    splurge { punter: PunterId, route: Vec<SiteId>, },
 }
 #[derive(Debug, Deserialize)]
 struct ServerMoves {
@@ -109,8 +110,12 @@ impl Rep {
                     Ok((Rep::Move {
                         moves: smove.moves.into_iter().map(|m| {
                             match m {
-                                ServerMove::claim { punter, source, target } => Move::Claim { punter: punter, source: source, target: target},
-                                ServerMove::pass { punter } => Move::Pass { punter: punter },
+                                ServerMove::claim { punter, source, target, } =>
+                                    Move::Claim { punter: punter, source: source, target: target, },
+                                ServerMove::pass { punter, } =>
+                                    Move::Pass { punter: punter, },
+                                ServerMove::splurge { punter, route, } =>
+                                    Move::Splurge { punter: punter, route: route, },
                             }
                         }).collect(),
                     }, maybe_state))
@@ -120,8 +125,12 @@ impl Rep {
                     Ok((Rep::Stop {
                         moves: stop.moves.into_iter().map(|m| {
                             match m {
-                                ServerMove::claim { punter, source, target } => Move::Claim { punter: punter, source: source, target: target},
-                                ServerMove::pass { punter } => Move::Pass { punter: punter },
+                                ServerMove::claim { punter, source, target, } =>
+                                    Move::Claim { punter: punter, source: source, target: target, },
+                                ServerMove::pass { punter, } =>
+                                    Move::Pass { punter: punter },
+                                ServerMove::splurge { punter, route, } =>
+                                    Move::Splurge { punter: punter, route: route, },
                             }
                         }).collect(),
                         scores: stop.scores,
@@ -257,6 +266,18 @@ mod test {
             moves: vec![
                 Move::Pass { punter: 0 },
                 Move::Pass { punter: 1 },
+                ]
+        };
+        assert_eq!(object,result);
+    }
+
+    #[test]
+    fn proto_move_3() {
+        let object = Rep::from_json::<()>("{\"move\":{\"moves\":[{\"splurge\":{\"punter\":0,\"route\":[0,1]}},{\"claim\":{\"punter\":1,\"source\":1,\"target\":2}}]}}").unwrap().0;
+        let result = Rep::Move {
+            moves: vec![
+                Move::Splurge { punter: 0, route: vec![0, 1], },
+                Move::Claim { punter: 1, source: 1, target: 2, },
                 ]
         };
         assert_eq!(object,result);
