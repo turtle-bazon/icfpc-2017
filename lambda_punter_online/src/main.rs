@@ -35,6 +35,7 @@ enum Error {
     AlwaysPassSolver(client::Error<()>),
     NearestSolver(client::Error<()>),
     LinkMinesSolver(client::Error<()>),
+    GNSolver(client::Error<()>),
     GameThreadSpawn(io::Error),
     GameThreadJoin(Box<std::any::Any + Send + 'static>),
 }
@@ -44,6 +45,7 @@ enum Solver {
     AlwaysPass,
     Nearest,
     LinkMines,
+    GN,
 }
 
 fn run() -> Result<(), Error> {
@@ -106,6 +108,9 @@ fn run() -> Result<(), Error> {
         .subcommand(SubCommand::with_name("link_mines")
                     .display_order(3)
                     .about("solvers::link_mines"))
+        .subcommand(SubCommand::with_name("gn")
+                    .display_order(3)
+                    .about("solvers::gn"))
         .get_matches();
 
     let server_host = matches.value_of("server-host")
@@ -131,6 +136,9 @@ fn run() -> Result<(), Error> {
         } else if let Some(..) = matches.subcommand_matches("link_mines") {
             debug!("using solvers::link_mines");
             Solver::LinkMines
+        } else if let Some(..) = matches.subcommand_matches("gn") {
+            debug!("using solvers::gn");
+            Solver::GN
         } else {
             return Err(Error::NoSubcommandProvided);
         };
@@ -188,6 +196,14 @@ fn run() -> Result<(), Error> {
                                 &hello_name,
                                 solvers::link_mines::LinkMinesGameStateBuilder,
                                 Error::LinkMinesSolver),
+                        Solver::GN =>
+                            proceed_with_solver(
+                                slave_id_counter,
+                                &server_host,
+                                server_port,
+                                &hello_name,
+                                solvers::gn::GNGameStateBuilder,
+                                Error::GNSolver),
                     }).ok();
                 })
                 .map_err(Error::GameThreadSpawn)?;
