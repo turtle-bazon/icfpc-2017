@@ -115,6 +115,29 @@ function reportCheckIsEagerGame($game) {
   return ((count($uniquePunters) == 1) && ($uniquePunters[0] == 'eager punter'));
 }
 
+function parseGameLog($log) {
+  $myPunterID = -1; $score = null;
+
+  $handle = fopen($log, "r");
+  while (($line = fgets($handle)) !== false) {
+    if (($myPunterID == -1) && (($pos = strpos($line, '{"ready":')) !== false)) {
+      $str = substr($line, $pos);
+      $data = json_decode($str, true);
+      $myPunterID = $data['ready'];
+      continue;
+    }
+
+    if (!$score && (($pos = strpos($line, '{"stop":')) !== false)) {
+      $str = substr($line, $pos);
+      $data = json_decode($str, true);
+      $score = $data['stop']['scores'];
+      continue;
+    }
+  }
+  fclose($handle);
+  return [$myPunterID, $score];
+}
+
 function reportUpdateGame(&$report, $game) {
   echo "[" . $game['pid'] . "] Game finished: " . $game['status']
            . (reportCheckIsEagerGame($game) ? " [ EAGER PUNTER ]" : "");
@@ -128,23 +151,7 @@ function reportUpdateGame(&$report, $game) {
   }
   else {
     /* Parse score here... */
-    $output = explode("\n", trim(file_get_contents($game['output'])));
-
-    $myPunterID = -1; $score = null;
-    foreach($output as $line) {
-      if (($myPunterID == -1) && (($pos = strpos($line, '{"ready":')) !== false)) {
-         $str = substr($line, $pos);
-         $data = json_decode($str, true);
-         $myPunterID = $data['ready'];
-         continue;
-      }
-      if (!$score && (($pos = strpos($line, '{"stop":')) !== false)) {
-         $str = substr($line, $pos);
-         $data = json_decode($str, true);
-         $score = $data['stop']['scores'];
-         continue;
-      }
-    }
+    list($myPunterID, $score) = parseGameLog($game['output']);
 
     $game['playerIndex'] = $myPunterID;
     $game['players'] = count($score);
