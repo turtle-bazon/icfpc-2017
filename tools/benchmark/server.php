@@ -2,7 +2,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-function fetchStatus() {
+function srvfetchStatus() {
   $curl = new \Curl\Curl();
   $curl->setUserAgent('SkobochkaBenchmarkBot/1.0.0 (+http://icfpc.gnoll.tech/bot.html)');
   $curl->setOpt(CURLOPT_FOLLOWLOCATION, true);
@@ -66,14 +66,55 @@ function fetchStatus() {
           'maxCount' => $maxPunters,
         ],
         'extensions' => $extensions,
-        'port' => (int)($nodes->item(3)->nodeValue),
+        'port' => (int)($nodes->item(4)->nodeValue),
         'map' => [
-          'name' => $nodes->item(4)->nodeValue,
-          'url' => 'http://punter.inf.ed.ac.uk/maps/' . $nodes->item(4)->nodeValue,
+          'name' => $nodes->item(5)->nodeValue,
+          'shortName' => substr($nodes->item(5)->nodeValue, 0, strpos($nodes->item(5)->nodeValue, '.json')),
+          'url' => 'http://punter.inf.ed.ac.uk/maps/' . $nodes->item(5)->nodeValue,
         ],
       ];
     }
   }
 
   return ['result' => true, 'ts' => $ts, 'servers' => $data];
+}
+
+function srvPrepareList($srvList) {
+  $outList = [];
+  foreach($srvList as $srv) {
+    if ($srv['status'] != 'WAIT') {
+      continue;
+    }
+
+    /* Fucking buggy stats %( */
+    if ($srv['punters']['maxCount'] == $srv['punters']['count']) {
+      continue;
+    }
+
+    $outList[] = $srv;
+  }
+  usort($outList, function ($l, $r) {
+    $lSlots = $l['punters']['maxCount'] - $l['punters']['count'];
+    $rSlots = $r['punters']['maxCount'] - $r['punters']['count'];
+    return $lSlots - $rSlots;
+  });
+  return $outList;
+}
+
+function srvAllocateSlot(&$srvList, $map) {
+  foreach($srvList as $key => $srv) {
+    if ($srv['map']['shortName'] != $map) {
+      continue;
+    }
+
+    /* Don't play with yourself */
+    if (in_array('skobochka', $srv['punters']['names'])) {
+      continue;
+    }
+
+    unset($srvList[$key]);
+    return $srv;
+  }
+
+  return false;
 }
