@@ -282,6 +282,8 @@ $report = reportInit($sMaps, $result->rounds);
 
 $games = [];
 
+$reportDelay = 0;
+
 $status = srvFetchStatus();
 $srvList = srvPrepareList($status['servers']);
 while ($keepGoing && !reportReady($report)) {
@@ -312,9 +314,15 @@ while ($keepGoing && !reportReady($report)) {
     }
 
     if ($keepGoing) {
-      sleep(5);
+      sleep(5); $reportDelay += 5;
       $status = srvFetchStatus();
       $srvList = srvPrepareList($status['servers']);
+    }
+
+    if ($reportDelay > 30) {
+      reportFinalize($report);
+      reportPrintHuman($report);
+      $reportDelay = 0;
     }
   }
 }
