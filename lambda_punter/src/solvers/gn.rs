@@ -133,8 +133,9 @@ impl GameState for GNGameState {
             debug!("no more goals to reach, choosing a new random one");
 
             // all current goals are reached for now, let's choose a random free river connected to our already existing path
+            let mut rng = rand::thread_rng();
             let mut new_goal = None;
-            rand::thread_rng().shuffle(&mut self.rivers);
+            rng.shuffle(&mut self.rivers);
             for river in self.rivers.iter() {
                 if !self.claimed_rivers.contains_key(river) {
                     for &mine_site in self.mines_connected_sites.iter() {
@@ -158,8 +159,20 @@ impl GameState for GNGameState {
                 self.mines_connected_sites.insert(rt);
                 (move_, self)
             } else {
-                // no new goals, just pass for now
-                (Move::Pass { punter: self.punter, }, self)
+                // no new goals, claim some random river if any
+                let move_ = {
+                    let free_rivers: Vec<_> = self.rivers
+                        .iter()
+                        .filter(|r| !self.claimed_rivers.contains_key(r))
+                        .collect();
+                    if let Some(river) = rng.choose(&free_rivers) {
+                        Move::Claim { punter: self.punter, source: river.source, target: river.target, }
+                    } else {
+                        // no more rivers to claim
+                        Move::Pass { punter: self.punter, }
+                    }
+                };
+                (move_, self)
             });
         }
     }
