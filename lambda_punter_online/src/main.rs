@@ -149,6 +149,7 @@ fn run() -> Result<(), Error> {
     let mut slave_id_counter = 0;
     let mut rng = rand::thread_rng();
     let mut total_wins = 0;
+    let mut total_draws = 0;
     let mut total_loses = 0;
     let mut loses = Vec::new();
 
@@ -232,9 +233,11 @@ fn run() -> Result<(), Error> {
                         }
                     }
                     games_played += 1;
-                    if let Some((_, best_punter)) = best {
+                    if let Some((best_score, best_punter)) = best {
                         if best_punter == my_punter {
                             total_wins += 1;
+                        } else if scores.iter().any(|s| (s.punter == my_punter) && (s.score == best_score)) {
+                            total_draws += 1;
                         } else {
                             total_loses += 1;
                             loses.push((port, my_punter, scores));
@@ -253,8 +256,8 @@ fn run() -> Result<(), Error> {
         ports_done.push(port);
     }
 
-    println!(" == OVERALL GAMES STAT: {} wins / {} loses ({}% winrate) == ",
-             total_wins, total_loses, total_wins as f64 * 100.0 / total_games as f64);
+    println!(" == OVERALL GAMES STAT: {} wins / {} draws / {} loses ({}% winrate) == ",
+             total_wins, total_draws, total_loses, total_wins as f64 * 100.0 / total_games as f64);
     println!("My loses:");
     for (port, my_punter, scores) in loses {
         println!(" * Port {}, punter: {}, scores: {:?}", port, my_punter, scores);
