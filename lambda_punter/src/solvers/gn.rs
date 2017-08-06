@@ -110,22 +110,12 @@ impl GameState for GNGameState {
                 let maybe_path = self.shortest_path(source, target, &mut gcache);
                 if let Some(path) = maybe_path {
                     debug!("there is a path for goal from {} to {}: {:?}", source, target, path);
-                    let mut offset = 0;
-                    while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
-                        let wanted_river = River::new(ps, pt);
-                        if self.claimed_rivers.get(&wanted_river).map(|&p| p == self.punter).unwrap_or(false) {
-                            // it is already mine river, skip it
-                            debug!("skipping already claimed river from {} to {}", ps, pt);
-                            offset += 1;
-                            continue;
-                        } else {
-                            // not yet mine river
-                            let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
-                            self.goals.push((target, source));
-                            self.mines_connected_sites.insert(ps);
-                            self.mines_connected_sites.insert(pt);
-                            return Ok((move_, self));
-                        }
+                    if let Some((ps, pt)) = self.choose_route_segment(path) {
+                        let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
+                        self.goals.push((target, source));
+                        self.mines_connected_sites.insert(ps);
+                        self.mines_connected_sites.insert(pt);
+                        return Ok((move_, self));
                     }
                 }
                 debug!("no route from {} to {}, proceeding with next", source, target);
@@ -232,5 +222,39 @@ impl GNGameState {
             .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, });
 
         self.rivers_graph.shortest_path(source, target, gcache, probe_claimed)
+    }
+
+    fn choose_route_segment(&self, path: &[SiteId]) -> Option<(SiteId, SiteId)> {
+        let mut best = None;
+        let mut offset = 0;
+        while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
+            let wanted_river = River::new(ps, pt);
+            if self.claimed_rivers.get(&wanted_river).map(|&p| p == self.punter).unwrap_or(false) {
+                debug!("  -- from {} to {}: already claimed by me", ps, pt);
+            } else {
+                let bw_coeff = self.rivers_bw
+                    .get(&wanted_river)
+                    .cloned()
+                    .unwrap_or(0.0);
+                debug!("  -- from {} to {}: bw_coeff = {}", ps, pt, bw_coeff);
+                best = match best {
+                    Some((best_river, best_bw_coeff)) => if bw_coeff < best_bw_coeff {
+                        Some((best_river, best_bw_coeff))
+                    } else {
+                        Some((wanted_river, bw_coeff))
+                    },
+                    _ =>
+                        Some((wanted_river, bw_coeff)),
+                };
+            }
+            offset += 1;
+        }
+
+        if let Some((river, bw_coeff)) = best {
+            debug!("choosing {:?} because of maximum bw_coeff: {}", river, bw_coeff);
+            Some((river.source, river.target))
+        } else {
+            None
+        }
     }
 }
