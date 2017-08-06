@@ -191,7 +191,7 @@ function reportFinalize(&$report) {
     if ($gameCount > 0) {
       $mapInfo['summary']['avgScore'] = round(((float) $score) / $gameCount, 2);
       $mapInfo['summary']['avgMetaScore'] = round(((float) $metaScore) / $gameCount, 2);
-      $mapInfo['summary']['winRate'] = rount(((float) $wins) / $gameCount, 2);
+      $mapInfo['summary']['winRate'] = round(((float) $wins) / $gameCount, 2);
       $mapInfo['summary']['metaScore'] = $metaScore;
     }
   }
