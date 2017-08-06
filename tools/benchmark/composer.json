@@ -1,5 +1,6 @@
 {
     "require": {
-        "php-curl-class/php-curl-class": "^7.3"
+        "php-curl-class/php-curl-class": "^7.3",
+        "corneltek/getoptionkit": "^2.6"
     }
 }
