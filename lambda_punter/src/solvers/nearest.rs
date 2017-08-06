@@ -95,8 +95,8 @@ impl NearestGameState {
 
     fn update_moves(&mut self, moves: Vec<Move>) {
         for mv in moves {
-            let punter = match mv {
-                Move::Claim { punter, source, target } => {
+            let punter = {
+                let mut update_river = |source, target| {
                     let src = min(source,target);
                     let dst = max(source,target);
                     self.all_rivers.entry(0)
@@ -105,9 +105,24 @@ impl NearestGameState {
                     self.all_rivers.entry(1)
                         .or_insert_with(HashSet::new)
                         .remove(&(src,dst));
-                    punter
-                },
-                Move::Pass { punter, } => punter,
+                };
+
+                match mv {
+                    Move::Claim { punter, source, target, } => {
+                        update_river(source, target);
+                        punter
+                    },
+                    Move::Pass { punter, } =>
+                        punter,
+                    Move::Splurge { punter, ref route, } => {
+                        let mut offset = 0;
+                        while let (Some(&source), Some(&target)) = (route.get(offset), route.get(offset + 1)) {
+                            update_river(source, target);
+                            offset += 1;
+                        }
+                        punter
+                    },
+                }
             };
             self.moves
                 .entry(punter)

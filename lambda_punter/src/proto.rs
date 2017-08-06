@@ -43,12 +43,14 @@ pub struct Setup {
 #[derive(PartialEq, Default, Debug, Deserialize)]
 pub struct Settings {
     pub futures: bool,
+    pub splurges: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Move {
     Claim { punter: PunterId, source: SiteId, target: SiteId, },
     Pass { punter: PunterId, },
+    Splurge { punter: PunterId, route: Vec<SiteId>, },
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -139,7 +141,11 @@ impl Rep {
                                 futures: match settings_obj.remove("futures") {
                                     Some(Value::Bool(true)) => true,
                                     _ => false,
-                                }
+                                },
+                                splurges: match settings_obj.remove("splurges") {
+                                    Some(Value::Bool(true)) => true,
+                                    _ => false,
+                                },
                             }
                         } else {
                             Default::default()
@@ -190,21 +196,27 @@ impl Req {
             },
             Req::Move(mv) => {
                 match mv {
-                    Move::Claim { punter, source, target } => {
-                        let m = vec![("punter",serde_json::to_value(punter).map_err(Error::Json)?),
-                                     ("source",serde_json::to_value(source).map_err(Error::Json)?),
-                                     ("target",serde_json::to_value(target).map_err(Error::Json)?),
-                                     ].into_iter()
-                            .map(|x| (x.0.to_string(),x.1))
-                            .collect::<BTreeMap<String,Value>>();
-                        res.insert("claim".to_string(),serde_json::to_value(m).map_err(Error::Json)?);
+                    Move::Claim { punter, source, target, } => {
+                        let m = vec![
+                            ("punter".to_string(), serde_json::to_value(punter).map_err(Error::Json)?),
+                            ("source".to_string(), serde_json::to_value(source).map_err(Error::Json)?),
+                            ("target".to_string(), serde_json::to_value(target).map_err(Error::Json)?),
+                        ].into_iter().collect::<BTreeMap<String, Value>>();
+                        res.insert("claim".to_string(), serde_json::to_value(m).map_err(Error::Json)?);
                     },
                     Move::Pass { punter } => {
-                        let m = vec![("punter",serde_json::to_value(punter).map_err(Error::Json)?)].into_iter()
-                            .map(|x| (x.0.to_string(),x.1))
-                            .collect::<BTreeMap<String,Value>>();
-                        res.insert("pass".to_string(),serde_json::to_value(m).map_err(Error::Json)?);
-                    }
+                        let m = vec![
+                            ("punter".to_string(), serde_json::to_value(punter).map_err(Error::Json)?),
+                        ].into_iter().collect::<BTreeMap<String,Value>>();
+                        res.insert("pass".to_string(), serde_json::to_value(m).map_err(Error::Json)?);
+                    },
+                    Move::Splurge { punter, route, } => {
+                        let m = vec![
+                            ("punter".to_string(), serde_json::to_value(punter).map_err(Error::Json)?),
+                            ("route".to_string(), serde_json::to_value(route).map_err(Error::Json)?),
+                        ].into_iter().collect::<BTreeMap<String, Value>>();
+                        res.insert("splurge".to_string(), serde_json::to_value(m).map_err(Error::Json)?);
+                    },
                 }
                 if let Some(state) = maybe_state {
                     res.insert("state".to_string(), serde_json::to_value(state).map_err(Error::Json)?);
@@ -303,7 +315,7 @@ mod test {
     #[test]
     fn proto_setup_settings() {
         let object = Rep::from_json::<()>("{\"punter\":0, \"punters\":2,
-\"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]},\"settings\":{\"futures\":true}}").unwrap().0;
+\"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]},\"settings\":{\"futures\":true,\"splurges\":true}}").unwrap().0;
         let result = Rep::Setup(Setup {
             punter: 0,
             punters: 2,
@@ -331,6 +343,7 @@ mod test {
             },
             settings: Settings {
                 futures: true,
+                splurges: true,
             },
         });
         assert_eq!(object,result);
