@@ -9,10 +9,8 @@ require_once __DIR__ . '/array-to-texttable.php';
 
 $specs = null;
 
-$solverBinary = null;
-
 function parseArgs() {
-  global $specs,$argv,$solverBinary;
+  global $specs,$argv;
 
   $specs = new \GetOptionKit\OptionCollection();
   $specs
@@ -48,11 +46,6 @@ function parseArgs() {
       usage(); exit(0);
     }
 
-    $args = $result->getArguments();
-    if(count($args) != 1) {
-      throw new Exception('Bad solver binary path');
-    }
-    $solverBinary = $args[0];
     return $result;
   }
   catch(Exception $e) {
@@ -262,8 +255,10 @@ function runGame($game) {
   $output = tempnam('/tmp', 'game');
   $game['output'] = $output;
 
-  $solver = $game['binary'];
-  $args = [$game['server']['port'], $output];
+  $solver = __DIR__ . '/lamduct';
+  $args = [ '--client-instance-logfile', $output, '--game-port', $game['server']['port'],
+            __DIR__ . '/../../lambda_punter_offline/target/release/lambda_punter_offline' ];
+  $env = [ 'RUST_LOG' => 'lambda_punter::client=debug' ];
 
   /* Time to fork... */
   switch ($pid = pcntl_fork()) {
@@ -272,7 +267,8 @@ function runGame($game) {
       break;
 
     case 0:
-      pcntl_exec($solver, $args);
+      pcntl_exec($solver, $args, $env);
+      die();
       break;
 
     default:
@@ -322,7 +318,6 @@ while ($keepGoing && !reportReady($report)) {
       break;
     }
 
-    $game['binary'] = $solverBinary;
     $game = runGame($game);
     $games[$game['pid']] = $game;
   }
