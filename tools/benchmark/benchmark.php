@@ -182,7 +182,7 @@ function reportUpdateGame(&$report, $game, $looseLog) {
 
     if ($game['result'] == 'loose') {
       @mkdir($looseLog, 0777, true);
-      $looseLogFilename = 'loose-log-{$map}-'
+      $looseLogFilename = "loose-log-{$map}-" . $game['pid'] . '-'
                         . ((new DateTime())->format('Y-m-d_h_m_i'))
                         . '.log';
       copy($game['output'], $looseLog . '/' . $looseLogFilename);
