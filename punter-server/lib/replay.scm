@@ -238,21 +238,23 @@
   #nil)
 
 (define (handle-line rctx line)
-  (let ((info-sep (string-index line #\|)))
-    (when info-sep
-      (let ((info-type (string-trim-both (substring line 0 info-sep)))
-            (info-data (string-trim-both (substring line (+ info-sep 1)))))
-        (cond
-         ((or (string=? info-type _SERVER_TO_PUNTER_)
-              (string=? info-type _PUNTER_TO_SERVER_)) (handle-protocol-message rctx info-type info-data))
-         (#t (handle-unknown-message rctx info-data)))))))
+  (when (string-contains line "DEBUG:lambda_punter::client:")
+    (let* ((actual-line (substring line 29))
+           (info-sep (string-index actual-line #\|)))
+      (when info-sep
+        (let ((info-type (string-trim-both (substring actual-line 0 info-sep)))
+              (info-data (string-trim-both (substring actual-line (+ info-sep 1)))))
+          (cond
+           ((or (string=? info-type _SERVER_TO_PUNTER_)
+                (string=? info-type _PUNTER_TO_SERVER_)) (handle-protocol-message rctx info-type info-data))
+           (#t (handle-unknown-message rctx info-data))))))))
 
 (define (generate-replay replay-file output-dir)
   (let ((rctx (make-replay-context -1 #nil #nil)))
     (with-input-from-file replay-file
       (lambda ()
         (let loop ((line (read-line)))
-          (if (not (eof-object? line))
-              (when (not (string=? "" line))
-                (handle-line rctx line)
-                (loop (read-line)))))))))
+          (when (not (eof-object? line))
+            (when (not (string=? "" line))
+              (handle-line rctx line))
+            (loop (read-line))))))))
