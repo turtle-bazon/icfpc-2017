@@ -13,5 +13,5 @@ pub mod game;
 pub mod chat;
 pub mod client;
 pub mod graph;
-
+pub mod prob;
 pub mod solvers;

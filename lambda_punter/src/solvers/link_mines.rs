@@ -67,7 +67,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
             rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
             goals: goals,
-            claimed_rivers: ClaimedRivers::new(),
+            claimed_rivers: Default::default(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
         }

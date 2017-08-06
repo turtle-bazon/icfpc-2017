@@ -63,7 +63,7 @@ impl GameStateBuilder for GNGameStateBuilder {
             rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
             goals: pairs.into_iter().map(|p| ((p.0).0, (p.0).1)).collect(),
-            claimed_rivers: ClaimedRivers::new(),
+            claimed_rivers: Default::default(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
             rivers_bw: rivers_bw,

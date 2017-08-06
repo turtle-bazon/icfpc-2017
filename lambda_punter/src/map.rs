@@ -9,7 +9,7 @@ pub struct Map {
     pub mines: Vec<SiteId>,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct River {
     pub source: SiteId,
     pub target: SiteId,
@@ -24,13 +24,10 @@ impl River {
     }
 }
 
+#[derive(Default)]
 pub struct RiversIndex<T>(HashMap<River, T>);
 
 impl<T> RiversIndex<T> {
-    pub fn new() -> RiversIndex<T> {
-        RiversIndex(HashMap::new())
-    }
-
     pub fn from_hash_map(map: HashMap<River, T>) -> RiversIndex<T> {
         RiversIndex(map)
     }
