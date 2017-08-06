@@ -83,7 +83,6 @@ function reportInit($maps, $rounds) {
 function reportPrintHuman($report) {
   $data = [];
   foreach($report['maps'] as $name => $info) {
-
     $data[] = [
       'Map' => $name,
       'Games' => count($info['games']),
@@ -110,8 +109,15 @@ function reportReady(&$report) {
   return true;
 }
 
+function reportCheckIsEagerGame($game) {
+  $srv = $game['server'];
+  $uniquePunters = array_unique($srv['punters']['names']);
+  return ((count($uniquePunters) == 1) && ($uniquePunters[0] == 'eager punter'));
+}
+
 function reportUpdateGame(&$report, $game) {
-  echo "[" . $game['pid'] . "] Game finished: " . $game['status'];
+  echo "[" . $game['pid'] . "] Game finished: " . $game['status']
+           . (reportCheckIsEagerGame($game) ? " [ EAGER PUNTER ]" : "");
 
   $map = $game['map'];
   if ($game['status'] == 'error') {
@@ -315,7 +321,7 @@ while ($keepGoing && !reportReady($report)) {
 
     if ($keepGoing) {
       sleep(5); $reportDelay += 5;
-      for ($retry = 0; $retry < 10; $retry++) {
+      for ($retry = 0; $keepGoing && ($retry < 10); $retry++) {
         try {
           $status = srvFetchStatus();
           break;
