@@ -4,7 +4,7 @@ use serde_json::value::Value;
 use serde_json;
 
 use super::types::{PunterId, SiteId};
-use super::map::{Site,River,Map};
+use super::map::{River, Map};
 use std::collections::BTreeMap;
 
 #[derive(PartialEq, Debug)]
@@ -26,7 +26,7 @@ pub enum Rep {
     },
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Future {
     pub source: SiteId,
     pub target: SiteId,
@@ -84,8 +84,12 @@ struct ServerStop {
     scores: Vec<Score>,
 }
 #[derive(Debug, Deserialize)]
+struct ServerSite {
+    id: SiteId,
+}
+#[derive(Debug, Deserialize)]
 struct ServerMap {
-    sites: Vec<Site>,
+    sites: Vec<ServerSite>,
     rivers: Vec<River>,
     mines: Vec<SiteId>,
 }
@@ -137,13 +141,13 @@ impl Rep {
                     }, maybe_state))
                 } else if map.contains_key("punter") && map.contains_key("punters") && map.contains_key("map") {
                     let smap = serde_json::from_value::<ServerMap>(map.remove("map").unwrap()).map_err(Error::Json)?;
-                    Ok((Rep::Setup(Setup{
+                    Ok((Rep::Setup(Setup {
                         punter: serde_json::from_value::<PunterId>(map.remove("punter").unwrap()).map_err(Error::Json)?,
                         punters: serde_json::from_value::<usize>(map.remove("punters").unwrap()).map_err(Error::Json)?,
                         map: Map {
-                            sites: smap.sites.into_iter().map(|s| (s.id,s)).collect(),
-                            rivers: smap.rivers.into_iter().collect(),
-                            mines: smap.mines.into_iter().collect(),
+                            sites: smap.sites.into_iter().map(|s| s.id).collect(),
+                            rivers: smap.rivers,
+                            mines: smap.mines,
                         },
                         settings: if let Some(Value::Object(mut settings_obj)) = map.remove("settings") {
                             Settings {
@@ -307,11 +311,7 @@ mod test {
             punter: 0,
             punters: 2,
             map: Map {
-                sites: vec![Site {id:4}, Site {id:1}, Site {id:3}, Site {id:6}, Site {id:5}, Site {id:0}, Site {id:7}, Site {id:2}]
-                    .into_iter()
-                    .map(|s| {
-                        (s.id, s)
-                    }).collect(),
+                sites: vec![4, 1, 3, 6, 5, 0, 7, 2],
                 rivers: vec![
                     River::new(3, 4),
                     River::new(0, 1),
@@ -341,11 +341,7 @@ mod test {
             punter: 0,
             punters: 2,
             map: Map {
-                sites: vec![Site {id:4}, Site {id:1}, Site {id:3}, Site {id:6}, Site {id:5}, Site {id:0}, Site {id:7}, Site {id:2}]
-                    .into_iter()
-                    .map(|s| {
-                        (s.id, s)
-                    }).collect(),
+                sites: vec![4, 1, 3, 6, 5, 0, 7, 2],
                 rivers: vec![
                     River::new(3, 4),
                     River::new(0, 1),

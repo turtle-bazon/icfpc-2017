@@ -26,6 +26,7 @@ enum Error {
     AlwaysPassSolver(client::Error<()>),
     NearestSolver(client::Error<()>),
     LinkMinesSolver(client::Error<()>),
+    GNSolver(client::Error<()>),
 }
 
 fn run() -> Result<(), Error> {
@@ -47,6 +48,9 @@ fn run() -> Result<(), Error> {
         .subcommand(SubCommand::with_name("link_mines")
                     .display_order(3)
                     .about("solvers::link_mines"))
+        .subcommand(SubCommand::with_name("gn")
+                    .display_order(4)
+                    .about("solvers::gn"))
         .get_matches();
 
     let hello_name = matches.value_of("hello-name")
@@ -62,6 +66,9 @@ fn run() -> Result<(), Error> {
     } else if let Some(..) = matches.subcommand_matches("link_mines") {
         debug!("using solvers::link_mines");
         proceed_with_solver(hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
+    } else if let Some(..) = matches.subcommand_matches("gn") {
+        debug!("using solvers::gn");
+        proceed_with_solver(hello_name, solvers::gn::GNGameStateBuilder, Error::GNSolver)
     } else {
         debug!("using solvers::link_mines");
         proceed_with_solver(hello_name, solvers::link_mines::LinkMinesGameStateBuilder, Error::LinkMinesSolver)
