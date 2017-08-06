@@ -315,7 +315,13 @@ while ($keepGoing && !reportReady($report)) {
 
     if ($keepGoing) {
       sleep(5); $reportDelay += 5;
-      $status = srvFetchStatus();
+      for ($retry = 0; $retry < 10; $retry++) {
+        try {
+          $status = srvFetchStatus();
+          break;
+        }
+        catch(Exception $e) { continue; }
+      }
       $srvList = srvPrepareList($status['servers']);
     }
 
