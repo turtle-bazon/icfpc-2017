@@ -237,13 +237,17 @@ mod test {
     use super::super::types::SiteId;
     use super::{Graph, EdgeAttr};
 
+    fn sample_map() -> Graph {
+        Graph::from_iter(
+            [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
+                .iter()
+                .cloned())
+    }
+
     #[test]
     fn shortest_path() {
         let mut cache = Default::default();
-        let graph = Graph::from_iter(
-            [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
-                .iter()
-                .cloned());
+        let graph = sample_map();
         let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only(1, 4, &mut cache), Some(path14));
         let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path_only(1, 5, &mut cache), Some(path15));
         let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path_only(0, 4, &mut cache), Some(path04));
@@ -272,7 +276,7 @@ mod test {
     }
 
     #[test]
-    fn betweenness() {
+    fn betweenness_mmds() {
         let mut cache = Default::default();
         let graph = Graph::from_iter(
             [(0, 1), (0, 2), (1, 2), (1, 3), (3, 4), (3, 5), (3, 6), (4, 5), (5, 6)]
@@ -293,5 +297,29 @@ mod test {
                                    ((3, 6), 4.5),
                                    ((4, 5), 1.5),
                                    ((5, 6), 1.5)]);
+    }
+
+    #[test]
+    fn betweenness_sample_map() {
+        let mut cache = Default::default();
+        let graph = sample_map();
+        let b_rivers = graph.rivers_betweenness(&mut cache);
+        let mut vb_rivers: Vec<_> = b_rivers
+            .into_iter()
+            .map(|(r, v)| ((r.source, r.target), v))
+            .collect();
+        vb_rivers.sort_by_key(|p| p.0);
+        assert_eq!(vb_rivers, vec![((0, 1), 3.5),
+                                   ((0, 7), 3.5),
+                                   ((1, 2), 3.5),
+                                   ((1, 3), 4.5),
+                                   ((1, 7), 4.5),
+                                   ((2, 3), 3.5),
+                                   ((3, 4), 3.5),
+                                   ((3, 5), 4.5),
+                                   ((4, 5), 3.5),
+                                   ((5, 6), 3.5),
+                                   ((5, 7), 4.5),
+                                   ((6, 7), 3.5)]);
     }
 }
