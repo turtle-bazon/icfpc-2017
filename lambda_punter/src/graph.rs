@@ -12,7 +12,7 @@ pub struct Graph {
 #[derive(Default)]
 pub struct GraphCache {
     pqueue: BinaryHeap<PQNode>,
-    visited: HashMap<SiteId, f64>,
+    visited: HashSet<SiteId>,
     path_buf: Vec<(SiteId, usize)>,
     path: Vec<SiteId>,
 }
@@ -73,10 +73,10 @@ impl Graph {
                 cache.path.reverse();
                 return Some(&cache.path);
             }
-            cache.visited.insert(site, 1.0);
+            cache.visited.insert(site);
             if let Some(neighs) = self.neighs.get(&site) {
                 for &reachable_site in neighs.iter() {
-                    if cache.visited.contains_key(&reachable_site) {
+                    if cache.visited.contains(&reachable_site) {
                         continue;
                     }
                     match probe_edge((site, reachable_site)) {
@@ -100,15 +100,106 @@ impl Graph {
     // The Girvan-Newman Algorithm
     pub fn rivers_betweenness(&self, cache: &mut GraphCache) -> HashMap<River, f64> {
         let mut rivers = HashMap::new();
+        let mut visit_cache = HashMap::new();
+        let mut visit_rev = BinaryHeap::new();
         for (&node, _) in self.neighs.iter() {
-            self.rivers_betweenness_pass(node, &mut rivers, cache);
+            self.rivers_betweenness_pass(node, &mut rivers, &mut visit_cache, &mut visit_rev, cache);
+        }
+        for betweenness2 in rivers.values_mut() {
+            *betweenness2 /= 2.0;
         }
         rivers
     }
 
-    fn rivers_betweenness_pass(&self, start_node: SiteId, rivers: &mut HashMap<River, f64>, cache: &mut GraphCache) {
+    fn rivers_betweenness_pass(
+        &self,
+        start_node: SiteId,
+        rivers: &mut HashMap<River, f64>,
+        visit_cache: &mut HashMap<SiteId, BssVisit>,
+        visit_rev: &mut BinaryHeap<(usize, SiteId)>,
+        cache: &mut GraphCache)
+    {
+        visit_cache.clear();
+        visit_rev.clear();
         cache.clear();
         cache.pqueue.push(PQNode { site: start_node, cost: 0, phead: 0, });
+        // forward pass
+        while let Some(PQNode { site, cost: parent_cost, .. }) = cache.pqueue.pop() {
+            let parent_count = {
+                let site_visit = visit_cache.entry(site)
+                    .or_insert_with(|| BssVisit {
+                        visited: false,
+                        cost: parent_cost,
+                        paths_count: 1,
+                        credits: 1.0,
+                    });
+                if site_visit.visited {
+                    continue;
+                } else {
+                    site_visit.visited = true;
+                    visit_rev.push((parent_cost, site));
+                    site_visit.paths_count
+                }
+            };
+            if let Some(neighs) = self.neighs.get(&site) {
+                let children_cost = parent_cost + 1;
+                for &reachable_site in neighs.iter() {
+                    let visit = visit_cache.entry(reachable_site)
+                        .or_insert_with(|| BssVisit {
+                            visited: false,
+                            cost: children_cost,
+                            paths_count: 0,
+                            credits: 1.0,
+                        });
+                    if visit.cost > parent_cost {
+                        visit.paths_count += parent_count;
+                    }
+                    if !visit.visited {
+                        cache.pqueue.push(PQNode {
+                            site: reachable_site,
+                            cost: children_cost,
+                            phead: 0,
+                        })
+                    }
+                }
+            }
+        }
+
+        // backward pass
+        while let Some((cost, node)) = visit_rev.pop() {
+            let credits = if let Some(visit) = visit_cache.get(&node) {
+                visit.credits
+            } else {
+                continue;
+            };
+            if let Some(neighs) = self.neighs.get(&node) {
+                let mut parents_paths_sum = 0;
+                for neigh in neighs.iter() {
+                    if let Some(parent) = visit_cache.get(neigh) {
+                        if parent.cost >= cost {
+                            // skip non DAG nodes
+                            continue;
+                        }
+                        parents_paths_sum += parent.paths_count;
+                    }
+                }
+                if parents_paths_sum == 0 {
+                    continue;
+                }
+                for &neigh in neighs.iter() {
+                    if let Some(parent) = visit_cache.get_mut(&neigh) {
+                        if parent.cost >= cost {
+                            // skip non DAG nodes
+                            continue;
+                        }
+                        let river = River::new(node, neigh);
+                        let river_credit = credits * parent.paths_count as f64 / parents_paths_sum as f64;
+                        *rivers.entry(river).or_insert(0.0) += river_credit;
+                        parent.credits += river_credit;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -131,6 +222,14 @@ impl PartialOrd for PQNode {
     fn partial_cmp(&self, other: &PQNode) -> Option<Ordering> {
         Some(self.cmp(other))
     }
+}
+
+#[derive(Debug)]
+struct BssVisit {
+    visited: bool,
+    cost: usize,
+    paths_count: usize,
+    credits: f64,
 }
 
 #[cfg(test)]
@@ -180,10 +279,19 @@ mod test {
                 .iter()
                 .cloned());
         let b_rivers = graph.rivers_betweenness(&mut cache);
-        let vb_rivers: Vec<_> = b_rivers
+        let mut vb_rivers: Vec<_> = b_rivers
             .into_iter()
             .map(|(r, v)| ((r.source, r.target), v))
             .collect();
-        assert_eq!(vb_rivers, vec![]);
+        vb_rivers.sort_by_key(|p| p.0);
+        assert_eq!(vb_rivers, vec![((0, 1), 5.0),
+                                   ((0, 2), 1.0),
+                                   ((1, 2), 5.0),
+                                   ((1, 3), 12.0),
+                                   ((3, 4), 4.5),
+                                   ((3, 5), 4.0),
+                                   ((3, 6), 4.5),
+                                   ((4, 5), 1.5),
+                                   ((5, 6), 1.5)]);
     }
 }
