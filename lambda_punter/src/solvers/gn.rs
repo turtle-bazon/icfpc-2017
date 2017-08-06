@@ -52,24 +52,11 @@ impl GameStateBuilder for GNGameStateBuilder {
         pairs.sort_by_key(|p| (p.1).len());
         debug!("initially choosen {} goals", pairs.len());
 
-        let futures =
-            if let Some(&(_, ref path)) = pairs.last() {
-                let len = path.len();
-                if setup.settings.futures && len >= 3 {
-                    if let (Some(&s), Some(&sp), Some(&tp), Some(&t)) =
-                        (path.get(0), path.get(1), path.get(len - 2), path.get(len - 1))
-                    {
-                        debug!("declaring direct future: from {} to {} and reverse one: from {} to {}", s, tp, t, sp);
-                        Some(vec![Future { source: s, target: tp, }, Future { source: t, target: sp, }])
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+        let futures = if setup.settings.futures {
+            proclaim_futures(&rivers_graph, &setup, &pairs)
+        } else {
+            None
+        };
 
         GNGameState {
             punter: setup.punter,
@@ -256,5 +243,25 @@ impl GNGameState {
         } else {
             None
         }
+    }
+}
+
+fn proclaim_futures(_rivers_graph: &Graph, setup: &Setup, pairs: &Vec<((SiteId, SiteId), Vec<SiteId>)>) -> Option<Vec<Future>> {
+    if let Some(&(_, ref path)) = pairs.last() {
+        let len = path.len();
+        if setup.settings.futures && len >= 3 {
+            if let (Some(&s), Some(&sp), Some(&tp), Some(&t)) =
+                (path.get(0), path.get(1), path.get(len - 2), path.get(len - 1))
+            {
+                debug!("declaring direct future: from {} to {} and reverse one: from {} to {}", s, tp, t, sp);
+                Some(vec![Future { source: s, target: tp, }, Future { source: t, target: sp, }])
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
