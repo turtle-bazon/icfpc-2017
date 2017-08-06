@@ -1,9 +1,8 @@
 use std::cmp::{min, max};
-use std::ops::{Deref, DerefMut};
 use std::collections::{HashMap, HashSet};
 
 use super::super::types::{PunterId, SiteId};
-use super::super::map::River;
+use super::super::map::{River, RiversIndex};
 use super::super::proto::{Move, Setup, Future};
 use super::super::game::{GameState, GameStateBuilder};
 use super::super::graph::{Graph, GraphCache, EdgeAttr};
@@ -75,7 +74,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
     }
 }
 
-struct ClaimedRivers(HashMap<River, PunterId>);
+type ClaimedRivers = RiversIndex<PunterId>;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkMinesGameState {
@@ -200,41 +199,5 @@ impl LinkMinesGameState {
             .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, });
 
         self.rivers_graph.shortest_path(source, target, gcache, probe_claimed)
-    }
-}
-
-impl ClaimedRivers {
-    fn new() -> ClaimedRivers {
-        ClaimedRivers(HashMap::new())
-    }
-}
-
-impl Deref for ClaimedRivers {
-    type Target = HashMap<River, PunterId>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ClaimedRivers {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-use serde::{ser, de};
-
-impl ser::Serialize for ClaimedRivers  {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ser::Serializer {
-        let vec: Vec<_> = self.iter().collect();
-        vec.serialize(serializer)
-    }
-}
-
-impl<'de> de::Deserialize<'de> for ClaimedRivers {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: de::Deserializer<'de> {
-        let vec: Vec<(River, PunterId)> = de::Deserialize::deserialize(deserializer)?;
-        Ok(ClaimedRivers(vec.into_iter().collect()))
     }
 }
