@@ -101,7 +101,7 @@ function srvPrepareList($srvList) {
   return $outList;
 }
 
-function srvAllocateSlot(&$srvList, $map) {
+function srvAllocateSlot(&$srvList, $map, $avoidEagerPunter = true) {
   foreach($srvList as $key => $srv) {
     if ($srv['map']['shortName'] != $map) {
       continue;
@@ -112,9 +112,21 @@ function srvAllocateSlot(&$srvList, $map) {
       continue;
     }
 
+    /* No 'eager punter' please */
+    if ($avoidEagerPunter) {
+      $uniquePunters = array_unique($srv['punters']['names']);
+      if ((count($uniquePunters) == 1) && ($uniquePunters[0] == 'eager punter')) {
+        continue;
+      }
+    }
+
     unset($srvList[$key]);
     return $srv;
   }
 
-  return false;
+
+  return $avoidEagerPunter
+    /* OK, if there's only eagers left - then let it be eager */
+    ? srvAllocateSlot($srvList, $map, false)
+    : false;
 }
