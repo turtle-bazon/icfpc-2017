@@ -166,7 +166,7 @@ impl GameState for GNGameState {
 
     fn stop(mut self, moves: Vec<Move>) -> Result<Self, Self::Error> {
         self.update_moves(moves);
-        debug!("STOP command invocked");
+        debug!("STOP command invoked");
         if let Some(ref futures) = self.futures {
             let mut gcache = Default::default();
             for &Future { source, target, } in futures.iter() {
