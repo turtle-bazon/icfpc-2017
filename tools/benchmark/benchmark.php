@@ -189,10 +189,10 @@ function reportFinalize(&$report) {
 
 
     if ($gameCount > 0) {
-      $mapInfo['summary']['avgScore'] = ((float) $score) / $gameCount;
-      $mapInfo['summary']['avgMetaScore'] = ((float) $metaScore) / $gameCount;
+      $mapInfo['summary']['avgScore'] = round(((float) $score) / $gameCount, 2);
+      $mapInfo['summary']['avgMetaScore'] = round(((float) $metaScore) / $gameCount, 2);
+      $mapInfo['summary']['winRate'] = rount(((float) $wins) / $gameCount, 2);
       $mapInfo['summary']['metaScore'] = $metaScore;
-      $mapInfo['summary']['winRate'] = ((float) $wins) / $gameCount;
     }
   }
 }
