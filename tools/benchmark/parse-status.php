@@ -30,7 +30,7 @@ function fetchStatus() {
     $ts->setTimezone(new DateTimeZone('UTC'));
   }
 
-  $elements = $xpath->query("//tr");
+  $elements = $xpath->query("//tr[position()>1]");
 
   $data = [];
 
