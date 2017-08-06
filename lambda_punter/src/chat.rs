@@ -125,7 +125,7 @@ pub fn run_offline<S, FS, SR, FR, RR, GB>(
 mod test {
     use super::{Error, run_online};
     use super::super::types::PunterId;
-    use super::super::map::{Map, Site, River};
+    use super::super::map::{Map, River};
     use super::super::proto::{Req, Rep, Move, Setup, Score};
     use super::super::game::{GameStateBuilder, GameState};
     use super::super::solvers::always_pass::AlwaysPassGameStateBuilder;
@@ -144,29 +144,23 @@ mod test {
     }
 
     fn default_map() -> Map {
-        let mut map: Map = Default::default();
-        map.sites.insert(4, Site { id: 4 });
-        map.sites.insert(1, Site { id: 1 });
-        map.sites.insert(3, Site { id: 3 });
-        map.sites.insert(6, Site { id: 6 });
-        map.sites.insert(5, Site { id: 5 });
-        map.sites.insert(0, Site { id: 0 });
-        map.sites.insert(7, Site { id: 7 });
-        map.sites.insert(2, Site { id: 2 });
-        map.rivers.insert(River::new(3, 4));
-        map.rivers.insert(River::new(0, 1));
-        map.rivers.insert(River::new(2, 3));
-        map.rivers.insert(River::new(1, 3));
-        map.rivers.insert(River::new(5, 6));
-        map.rivers.insert(River::new(4, 5));
-        map.rivers.insert(River::new(3, 5));
-        map.rivers.insert(River::new(6, 7));
-        map.rivers.insert(River::new(5, 7));
-        map.rivers.insert(River::new(1, 7));
-        map.rivers.insert(River::new(0, 7));
-        map.rivers.insert(River::new(1, 2));
-        map.mines.insert(1);
-        map.mines.insert(5);
+        let mut map = Map {
+            sites: vec![4, 1, 3, 6, 5, 0, 7, 2],
+            mines: vec![1, 5],
+            ..Default::default()
+        };
+        map.rivers.push(River::new(3, 4));
+        map.rivers.push(River::new(0, 1));
+        map.rivers.push(River::new(2, 3));
+        map.rivers.push(River::new(1, 3));
+        map.rivers.push(River::new(5, 6));
+        map.rivers.push(River::new(4, 5));
+        map.rivers.push(River::new(3, 5));
+        map.rivers.push(River::new(6, 7));
+        map.rivers.push(River::new(5, 7));
+        map.rivers.push(River::new(1, 7));
+        map.rivers.push(River::new(0, 7));
+        map.rivers.push(River::new(1, 2));
         map
     }
 

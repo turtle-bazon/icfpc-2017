@@ -1,5 +1,6 @@
 use std::cmp::{min, max};
 use std::collections::{HashMap, HashSet};
+use rand::Rng;
 
 use super::super::types::{PunterId, SiteId};
 use super::super::map::{River, RiversIndex};
@@ -13,12 +14,18 @@ impl GameStateBuilder for GNGameStateBuilder {
     type GameState = GNGameState;
 
     fn build(self, setup: Setup) -> Self::GameState {
+        // make map graph
         let rivers_graph = Graph::from_map(&setup.map);
         let mut gcache = Default::default();
+
+        // calculate betweenness coeffs
+        let rivers_bw = RiversIndex::from_hash_map(
+            rivers_graph.rivers_betweenness(&mut gcache));
+
         let mut mine_pairs = HashMap::new();
         if setup.map.mines.len() < 2 {
             if let Some(&mine) = setup.map.mines.iter().next() {
-                for (&site, _) in setup.map.sites.iter() {
+                for &site in setup.map.sites.iter() {
                     let key = (min(mine, site), max(mine, site));
                     if let Some(path) = rivers_graph.shortest_path_only(key.0, key.1, &mut gcache) {
                         mine_pairs.insert(key, path.to_owned());
@@ -79,7 +86,7 @@ type ClaimedRivers = RiversIndex<PunterId>;
 #[derive(Serialize, Deserialize)]
 pub struct GNGameState {
     punter: PunterId,
-    rivers: HashSet<River>,
+    rivers: Vec<River>,
     rivers_graph: Graph,
     goals: Vec<(SiteId, SiteId, SiteId, SiteId)>, // TODO: use here plain (source, target) -- instead A* should use already build path chunks
     claimed_rivers: ClaimedRivers,

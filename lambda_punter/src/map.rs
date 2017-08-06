@@ -1,18 +1,12 @@
 use std::cmp::{min, max};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use super::types::SiteId;
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Map {
-    pub sites: HashMap<SiteId, Site>,
-    pub rivers: HashSet<River>,
-    pub mines: HashSet<SiteId>,
-}
-
-
-#[derive(Debug,PartialEq, Serialize, Deserialize)]
-pub struct Site {
-    pub id: SiteId,
+    pub sites: Vec<SiteId>,
+    pub rivers: Vec<River>,
+    pub mines: Vec<SiteId>,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -35,6 +29,10 @@ pub struct RiversIndex<T>(HashMap<River, T>);
 impl<T> RiversIndex<T> {
     pub fn new() -> RiversIndex<T> {
         RiversIndex(HashMap::new())
+    }
+
+    pub fn from_hash_map(map: HashMap<River, T>) -> RiversIndex<T> {
+        RiversIndex(map)
     }
 }
 
