@@ -6,6 +6,7 @@ extern crate lambda_punter;
 use std::process;
 use clap::{Arg, SubCommand};
 use lambda_punter::{client, game, solvers};
+use lambda_punter::game::GameState;
 
 fn main() {
     env_logger::init().unwrap();
@@ -79,10 +80,14 @@ fn proceed_with_solver<GB, EF>(
         .map_err(err_map)?;
     info!("all done");
 
-    if let Some((scores, _game_state)) = maybe_results {
+    if let Some((scores, game_state)) = maybe_results {
+        let my_punter = game_state.get_punter();
         info!("Game over! Total server scores:");
         for score in scores {
-            info!("  Punter: {}, score: {}", score.punter, score.score);
+            info!("  Punter: {}{}, score: {}",
+                  score.punter,
+                  if score.punter == my_punter { " (it's me)" } else { "" },
+                  score.score);
         }
     }
 
