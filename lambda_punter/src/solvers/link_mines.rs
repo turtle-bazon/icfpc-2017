@@ -170,8 +170,19 @@ impl GameState for LinkMinesGameState {
 impl LinkMinesGameState {
     fn update_moves(&mut self, moves: Vec<Move>) {
         for move_ in moves {
-            if let Move::Claim { punter, source, target, } = move_ {
-                self.claimed_rivers.insert(River::new(source, target), punter);
+            match move_ {
+                Move::Claim { punter, source, target, } => {
+                    self.claimed_rivers.insert(River::new(source, target), punter);
+                },
+                Move::Pass { .. } =>
+                    (),
+                Move::Splurge { punter, route, } => {
+                    let mut offset = 0;
+                    while let (Some(&source), Some(&target)) = (route.get(offset), route.get(offset + 1)) {
+                        self.claimed_rivers.insert(River::new(source, target), punter);
+                        offset += 1;
+                    }
+                },
             }
         }
     }
