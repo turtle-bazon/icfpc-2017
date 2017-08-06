@@ -26,7 +26,7 @@ function parseArgs() {
   $specs
     ->add('p|parallel?', 'Number of concurrent running games.')
     ->isa('Number')
-    ->defaultValue(2);
+    ->defaultValue(10);
 
   $specs
     ->add('l|logLoose?', 'Location for loose games logs.')
@@ -34,7 +34,7 @@ function parseArgs() {
     ->defaultValue('./benchmark/loose');
 
   $specs
-    ->add('e|eager', 'Try to avoid player named "eager punter"');
+    ->add('e|eager', 'Do not avoid player named "eager punter"');
 
   $specs
     ->add('help', 'Show usage help');
@@ -313,7 +313,7 @@ $status = srvFetchStatus();
 $srvList = srvPrepareList($status['servers']);
 while ($keepGoing && !reportReady($report)) {
   while (count($games) < $result->parallel) {
-    $game = allocateNextGame($report, $srvList, $result->eager);
+    $game = allocateNextGame($report, $srvList, !$result->eager);
     if ($game === false) {
       break;
     }
