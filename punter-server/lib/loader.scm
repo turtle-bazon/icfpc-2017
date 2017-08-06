@@ -1,7 +1,8 @@
 (define-module (lib loader)
   #:use-module (json)
   #:use-module (lib game-data)
-  #:export (load-game-map))
+  #:export (transform->game-map
+            load-game-map))
 
 (define (transform->site site)
   (make-site (hash-ref site "id")
