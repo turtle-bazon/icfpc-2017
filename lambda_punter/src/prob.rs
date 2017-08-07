@@ -1,3 +1,4 @@
+use std::time;
 use rand;
 use rand::distributions::{Weighted, WeightedChoice, IndependentSample};
 
@@ -133,6 +134,7 @@ pub fn estimate_best_future<F>(
     punters_count: usize,
     make_move: F,
     games_count: usize,
+    time_limit: time::Duration,
     mcache: &mut MonteCarloCache,
     gcache: &mut GraphCache<f64>,
 )
@@ -140,12 +142,13 @@ pub fn estimate_best_future<F>(
     where F: for<'a> Fn(&'a [River], &RiversIndex<PunterId>) -> Option<&'a River>
 {
     let mut best = None;
-    println!(" ;; starting `estimate_best_future`");
+    let timeout_start = time::Instant::now();
     graph.generic_bfs(mine, 0.0, |path, cost, prev_reward| {
-        println!(" ;; step_fn({:?}, {}, {})", path, cost, prev_reward);
+        if timeout_start.elapsed() > time_limit {
+            return StepCommand::Terminate;
+        }
         if let (Some(&source), Some(&target)) = (path.first(), path.last()) {
             if mines.iter().any(|&m| m == target) {
-                println!(" ;; target {} is a mine! zeroing reward", target);
                 StepCommand::Continue(0.0)
             } else {
                 let maybe_prob = journey_success_simulate(
@@ -156,11 +159,9 @@ pub fn estimate_best_future<F>(
                     &make_move,
                     games_count,
                     mcache);
-                println!(" ;; simulation results for {:?} is {:?}", path, maybe_prob);
                 if let Some(prob) = maybe_prob {
                     let reward = cost * cost * cost;
                     let expected_reward = reward as f64 * prob;
-                    println!(" ;; expected reward for path {:?} is {} (prev was {})", path, expected_reward, prev_reward);
                     // track the best future candidate
                     best = Some(if let Some((best_reward, best_fut)) = best.take() {
                         if best_reward < expected_reward {
@@ -191,10 +192,12 @@ pub fn estimate_best_future<F>(
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
     use std::collections::HashSet;
     use super::super::types::PunterId;
     use super::super::graph::Graph;
     use super::super::map::{River, RiversIndex};
+    use super::super::test_common::*;
     use super::{journey_success_simulate, estimate_best_future};
 
     fn sample_map() -> (Graph, RiversIndex<f64>) {
@@ -203,7 +206,7 @@ mod test {
                 .iter()
                 .cloned());
         let mut gcache = Default::default();
-        let rivers_bw = RiversIndex::from_hash_map(graph.rivers_betweenness(&mut gcache));
+        let rivers_bw = RiversIndex::from_hash_map(graph.rivers_betweenness::<()>(&mut gcache));
         (graph, rivers_bw)
     }
 
@@ -272,8 +275,19 @@ mod test {
         let mut mcache = Default::default();
 
         let future =
-            estimate_best_future(&graph, 1, &[1, 5], &rivers_bw, 1, 2, make_move, 10000, &mut mcache, &mut gcache).unwrap();
-        assert_eq!(future, (0, 0));
+            estimate_best_future(&graph, 1, &[1, 5], &rivers_bw, 1, 2, make_move,
+                                 10000, Duration::from_millis(5000), &mut mcache, &mut gcache).unwrap();
+        assert!((future.1 == 4) || (future.1 == 6));
     }
 
+    #[test]
+    fn random_medium_map_best_future() {
+        let graph = random_medium_map_graph();
+        let mut gcache = Default::default();
+        let mut mcache = Default::default();
+        let rivers_bw = RiversIndex::from_hash_map(graph.rivers_betweenness(&mut gcache));
+
+        estimate_best_future(&graph, 60, &[60, 10, 31, 33], &rivers_bw, 3, 4, make_move,
+                             187, Duration::from_millis(5000), &mut mcache, &mut gcache).unwrap();
+    }
 }

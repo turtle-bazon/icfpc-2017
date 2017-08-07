@@ -20,7 +20,7 @@ impl GameStateBuilder for GNGameStateBuilder {
 
         // calculate betweenness coeffs
         let rivers_bw = RiversIndex::from_hash_map(
-            rivers_graph.rivers_betweenness(&mut gcache));
+            rivers_graph.rivers_betweenness::<()>(&mut gcache));
 
         let mut mine_pairs = HashMap::new();
         if setup.map.mines.len() < 2 {

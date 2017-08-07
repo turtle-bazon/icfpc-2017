@@ -196,7 +196,7 @@ impl Graph {
     }
 
     // The Girvan-Newman Algorithm
-    pub fn rivers_betweenness(&self, cache: &mut GraphCache) -> HashMap<River, f64> {
+    pub fn rivers_betweenness<S>(&self, cache: &mut GraphCache<S>) -> HashMap<River, f64> where S: Default {
         let mut rivers = HashMap::new();
         let mut visit_cache = HashMap::new();
         let mut visit_rev = BinaryHeap::new();
@@ -344,19 +344,13 @@ struct BssVisit {
 #[cfg(test)]
 mod test {
     use super::super::types::SiteId;
+    use super::super::test_common::*;
     use super::{Graph, EdgeAttr};
-
-    fn sample_map() -> Graph {
-        Graph::from_iter(
-            [(3, 4), (0, 1), (2, 3), (1, 3), (5, 6), (4, 5), (3, 5), (6, 7), (5, 7), (1, 7), (0, 7), (1, 2)]
-                .iter()
-                .cloned())
-    }
 
     #[test]
     fn shortest_path() {
         let mut cache = Default::default();
-        let graph = sample_map();
+        let graph = sample_map_graph();
         let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only::<()>(1, 4, &mut cache), Some(path14));
         let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path_only::<()>(1, 5, &mut cache), Some(path15));
         let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path_only::<()>(0, 4, &mut cache), Some(path04));
@@ -391,7 +385,7 @@ mod test {
             [(0, 1), (0, 2), (1, 2), (1, 3), (3, 4), (3, 5), (3, 6), (4, 5), (5, 6)]
                 .iter()
                 .cloned());
-        let b_rivers = graph.rivers_betweenness(&mut cache);
+        let b_rivers = graph.rivers_betweenness::<()>(&mut cache);
         let mut vb_rivers: Vec<_> = b_rivers
             .into_iter()
             .map(|(r, v)| ((r.source, r.target), v))
@@ -411,15 +405,15 @@ mod test {
     #[test]
     fn longest_jouney() {
         let mut cache = Default::default();
-        let graph = sample_map();
+        let graph = sample_map_graph();
         assert_eq!(graph.longest_jouney_from::<()>(6, &mut cache).and_then(|p| p.last().cloned()), Some(2));
     }
 
     #[test]
     fn betweenness_sample_map() {
         let mut cache = Default::default();
-        let graph = sample_map();
-        let b_rivers = graph.rivers_betweenness(&mut cache);
+        let graph = sample_map_graph();
+        let b_rivers = graph.rivers_betweenness::<()>(&mut cache);
         let mut vb_rivers: Vec<_> = b_rivers
             .into_iter()
             .map(|(r, v)| ((r.source, r.target), v))
@@ -442,20 +436,8 @@ mod test {
     #[test]
     fn betweenness_random_medium_map() {
         let mut cache = Default::default();
-        let graph = Graph::from_iter(
-            [(81,91),(57,68),(32,68),(52,68),(32,52),(5,49),(5,74),(8,35),(53,71),(59,77),(22,53),(2,24),(27,40),(25,40),(36,40),(40,61),(25,44),
-             (3,78),(30,85),(3,67),(61,67),(65,67),(1,30),(1,65),(22,51),(42,72),(42,53),(53,72),(22,72),(6,45),(64,87),(17,50),(50,82),(1,82),
-             (1,67),(54,77),(16,38),(9,18),(7,10),(11,12),(6,14),(7,15),(10,15),(8,20),(0,21),(14,23),(4,24),(10,26),(15,26),(4,27),(11,29),(12,29),
-             (3,30),(13,31),(5,32),(0,34),(31,36),(34,37),(18,38),(0,39),(21,39),(33,39),(13,41),(31,41),(33,43),(42,45),(26,46),(7,47),(10,47),
-             (15,47),(34,47),(37,47),(43,48),(0,49),(21,49),(39,49),(35,51),(10,52),(16,54),(4,55),(24,55),(0,56),(21,56),(34,56),(49,56),(52,56),
-             (9,57),(12,58),(19,58),(23,58),(29,58),(15,59),(14,60),(23,60),(58,60),(26,62),(46,62),(59,62),(46,63),(59,63),(62,63),(14,64),
-             (19,64),(23,64),(58,64),(60,64),(13,66),(31,66),(36,66),(45,69),(14,70),(53,70),(20,71),(28,72),(7,73),(10,73),(34,73),(47,73),
-             (52,73),(43,74),(48,74),(11,75),(12,75),(29,75),(58,75),(33,76),(43,76),(48,76),(74,76),(20,77),(61,78),(22,79),(69,79),(13,80),
-             (31,80),(44,80),(57,81),(17,82),(74,82),(33,83),(43,83),(48,83),(76,83),(13,84),(41,84),(21,85),(33,85),(39,85),(75,85),(23,86),
-             (37,86),(58,86),(4,87),(24,87),(55,87),(2,88),(6,88),(28,88),(2,89),(28,89),(88,89),(59,90),(63,90),(46,91),(59,91),(62,91),(63,91),
-             (90,91),(33,92),(43,92),(48,92),(76,92),(83,92),(50,93),(10,94),(15,94),(26,94),(62,94),(73,94),(11,95),(40,95),(78,95),(0,96),
-             (21,96),(39,96),(56,96),(85,96)].iter().cloned());
-        let b_rivers = graph.rivers_betweenness(&mut cache);
+        let graph = random_medium_map_graph();
+        let b_rivers = graph.rivers_betweenness::<()>(&mut cache);
         let mut vb_rivers: Vec<_> = b_rivers
             .into_iter()
             .map(|(r, v)| ((r.source, r.target), (v * 1000.0) as usize))
