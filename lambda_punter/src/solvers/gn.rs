@@ -1,3 +1,4 @@
+use std::time;
 use std::cmp::{min, max};
 use std::collections::{HashMap, HashSet};
 use rand::{self, Rng};
@@ -7,6 +8,7 @@ use super::super::map::{River, RiversIndex};
 use super::super::proto::{Move, Setup, Future};
 use super::super::game::{GameState, GameStateBuilder};
 use super::super::graph::{Graph, GraphCache, EdgeAttr};
+use super::super::prob;
 
 pub struct GNGameStateBuilder;
 
@@ -14,55 +16,101 @@ impl GameStateBuilder for GNGameStateBuilder {
     type GameState = GNGameState;
 
     fn build(self, setup: Setup) -> Self::GameState {
+        let timeout_start = time::Instant::now();
+        let max_timeout = time::Duration::from_secs(9);
+
         // make map graph
         let rivers_graph = Graph::from_map(&setup.map);
         let mut gcache = Default::default();
 
         // calculate betweenness coeffs
         let rivers_bw = RiversIndex::from_hash_map(
-            rivers_graph.rivers_betweenness::<()>(&mut gcache));
+            rivers_graph.rivers_betweenness(&mut gcache));
 
-        let mut mine_pairs = HashMap::new();
-        if setup.map.mines.len() < 2 {
-            debug!("there is only one mine on this map");
-            if let Some(&mine) = setup.map.mines.iter().next() {
-                if let Some(path) = rivers_graph.longest_jouney_from(mine, &mut gcache) {
-                    if let Some(&longest_jouney_site) = path.last() {
-                        debug!("longest jouney choosen from mine {} to {}", mine, longest_jouney_site);
-                        let key = (min(mine, longest_jouney_site), max(mine, longest_jouney_site));
-                        mine_pairs.insert(key, path.to_owned());
+        let mut futures = None;
+        if setup.settings.futures {
+            // in case there is futures support, try to estimate the best ones
+            let mut mcache = Default::default();
+            let mut futures_estimated = Vec::with_capacity(setup.map.mines.len());
+            for &mine in setup.map.mines.iter() {
+                if let Some(time_avail) = max_timeout.checked_sub(timeout_start.elapsed()) {
+                    debug!("guessing a future for mine {}, {:?} time left", mine, time_avail);
+                    let future_guess =
+                        prob::estimate_best_future(
+                            &rivers_graph,
+                            mine,
+                            &setup.map.mines,
+                            &rivers_bw,
+                            3,
+                            4,
+                            |path_rivers, claimed_rivers| {
+                                path_rivers
+                                    .iter()
+                                    .filter(|&r| !claimed_rivers.contains_key(r))
+                                    .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 10000.0) as u64).unwrap_or(0))
+                            },
+                            setup.map.rivers.len(),
+                            time_avail,
+                            &mut mcache,
+                            &mut gcache);
+                    if let Some((source, target)) = future_guess {
+                        debug!("guessed a future from {} to {}", source, target);
+                        futures_estimated.push(Future { source: source, target: target, });
                     }
+                } else {
+                    debug!("no more futures guessing, time is expired");
+                    break;
                 }
             }
+
+            if !futures_estimated.is_empty() {
+                futures = Some(futures_estimated);
+            }
+        }
+
+        let goals: Vec<_> = if let Some(ref futs) = futures {
+            // build goals from futures
+            futs.iter().map(|fut| (fut.source, fut.target)).collect()
         } else {
-            debug!("there are {} mines on this map", setup.map.mines.len());
-            for &mine_a in setup.map.mines.iter() {
-                for &mine_b in setup.map.mines.iter() {
-                    let key = (min(mine_a, mine_b), max(mine_a, mine_b));
-                    if (mine_a != mine_b) && !mine_pairs.contains_key(&key) {
-                        if let Some(path) = rivers_graph.shortest_path_only(key.0, key.1, &mut gcache) {
+            // in case there is no futures support or we have failed to build a future, try to link mines pairwise
+            let mut mine_pairs = HashMap::new();
+            if setup.map.mines.len() < 2 {
+                debug!("there is only one mine on this map");
+                if let Some(&mine) = setup.map.mines.iter().next() {
+                    if let Some(path) = rivers_graph.longest_jouney_from(mine, &mut gcache) {
+                        if let Some(&longest_jouney_site) = path.last() {
+                            debug!("longest jouney choosen from mine {} to {}", mine, longest_jouney_site);
+                            let key = (min(mine, longest_jouney_site), max(mine, longest_jouney_site));
                             mine_pairs.insert(key, path.to_owned());
                         }
                     }
                 }
+            } else {
+                debug!("there are {} mines on this map", setup.map.mines.len());
+                for &mine_a in setup.map.mines.iter() {
+                    for &mine_b in setup.map.mines.iter() {
+                        let key = (min(mine_a, mine_b), max(mine_a, mine_b));
+                        if (mine_a != mine_b) && !mine_pairs.contains_key(&key) {
+                            if let Some(path) = rivers_graph.shortest_path_only(key.0, key.1, &mut gcache) {
+                                mine_pairs.insert(key, path.to_owned());
+                            }
+                        }
+                    }
+                }
             }
-        }
 
-        let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
-        pairs.sort_by_key(|p| (p.1).len());
-        debug!("initially choosen {} goals", pairs.len());
-
-        let futures = if setup.settings.futures {
-            proclaim_futures(&rivers_graph, &setup, &pairs)
-        } else {
-            None
+            let mut pairs: Vec<_> = mine_pairs.into_iter().collect();
+            pairs.sort_by_key(|p| (p.1).len());
+            pairs.into_iter().map(|p| ((p.0).0, (p.0).1)).collect()
         };
+
+        debug!("initially choosen {} goals", goals.len());
 
         GNGameState {
             punter: setup.punter,
             rivers: setup.map.rivers,
             rivers_graph: rivers_graph,
-            goals: pairs.into_iter().map(|p| ((p.0).0, (p.0).1)).collect(),
+            goals: goals,
             claimed_rivers: Default::default(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
@@ -243,25 +291,5 @@ impl GNGameState {
         } else {
             None
         }
-    }
-}
-
-fn proclaim_futures(_rivers_graph: &Graph, setup: &Setup, pairs: &Vec<((SiteId, SiteId), Vec<SiteId>)>) -> Option<Vec<Future>> {
-    if let Some(&(_, ref path)) = pairs.last() {
-        let len = path.len();
-        if setup.settings.futures && len >= 3 {
-            if let (Some(&s), Some(&sp), Some(&tp), Some(&t)) =
-                (path.get(0), path.get(1), path.get(len - 2), path.get(len - 1))
-            {
-                debug!("declaring direct future: from {} to {} and reverse one: from {} to {}", s, tp, t, sp);
-                Some(vec![Future { source: s, target: tp, }, Future { source: t, target: sp, }])
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    } else {
-        None
     }
 }
