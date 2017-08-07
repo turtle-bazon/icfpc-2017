@@ -8,6 +8,7 @@
             add-game-state-move!
             game-state-claims
             game-state-futures
+            game-state-options
 
             game
             game?
@@ -43,14 +44,17 @@
             site-y
 
             pass-move
-            claim-move))
+            claim-move
+            splurge-move
+            option-move))
 
 (define-record-type game-state
-  (_make-game-state moves claims futures)
+  (_make-game-state moves claims futures options)
   game-state?
   (moves game-state-moves set-game-state-moves!)
   (claims game-state-claims)
-  (futures game-state-futures))
+  (futures game-state-futures)
+  (options game-state-options))
 
 (define-record-type game
   (make-game punters-count game-map)
@@ -92,6 +96,15 @@
               (source . ,source)
               (target . ,target)))))
 
+(define (splurge-move punter route)
+  `((splurge . ((punter . ,punter)
+                (route . ,route)))))
+
+(define (option-move punter source target)
+  `((option . ((punter . ,punter)
+               (source . ,source)
+               (target . ,target)))))
+
 (define (punters-list punters-count)
   (list-ec (:range i punters-count) i))
 
@@ -100,6 +113,7 @@
    (map
     pass-move
     (punters-list punters-count))
+   (make-hash-table)
    (make-hash-table)
    (make-hash-table)))
 

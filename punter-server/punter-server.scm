@@ -6,7 +6,8 @@
              (lib game-data)
              (lib loader)
              (lib log)
-             (lib replay)             
+             (lib replay)
+             (srfi srfi-1)
              (srfi srfi-18))
 
 (define *server* #nil)

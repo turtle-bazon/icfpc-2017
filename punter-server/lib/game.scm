@@ -8,7 +8,10 @@
             connected-rivers
             game-score
             declare-futures
-            apply-claim))
+            apply-claim
+            apply-pass
+            apply-splurge
+            apply-option))
 
 (define *game* (make-fluid #nil))
 
@@ -196,3 +199,41 @@
         (begin
           (hash-set! claims river-def punter)
           (add-game-state-move! cur-game-state (claim-move punter rsource rtarget))))))
+
+(define (apply-pass punter)
+  (let* ((cur-game-state (fluid-ref *game-state*)))
+    (add-game-state-move! cur-game-state (pass-move punter))))
+
+(define (apply-splurge punter route)
+  (let* ((cur-game (fluid-ref *game*))
+         (cur-game-state (fluid-ref *game-state*))
+         (claims (game-state-claims cur-game-state))
+         (options (game-state-options cur-game-state)))
+    (-> (map
+         (lambda (site1 site2)
+           (list (min site1 site2) (max site1 site2)))
+         (take route (- (length route) 1))
+         (cdr route))
+        (->> (map (lambda (river-def)
+                    (if (hash-ref claims river-def)
+                        (hash-set! options river-def punter)
+                        (hash-set! claims river-def punter))))))
+    (add-game-state-move! cur-game-state (splurge-move punter route))))
+
+(define (apply-option punter river)
+  (let* ((cur-game (fluid-ref *game*))
+         (cur-game-state (fluid-ref *game-state*))
+         (claims (game-state-claims cur-game-state))
+         (options (game-state-options cur-game-state))
+         (rsource (river-source river))
+         (rtarget (river-target river))
+         (source (min rsource rtarget))
+         (target (max rsource rtarget))
+         (river-def (list source target)))
+    (if (and (hash-ref claims river-def)
+             (not (hash-ref options river-def)))
+        (begin
+          (hash-set! options river-def punter)
+          (add-game-state-move! cur-game-state (claim-move punter rsource rtarget)))
+        (begin
+          (add-game-state-move! cur-game-state (pass-move punter))))))

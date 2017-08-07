@@ -86,7 +86,7 @@
              (site-y site-target)
              color)
      ";"
-     (format #f "set label at ~a,~a \"~a\" font \"DejaVuSans,15\" front textcolor 'gray'"
+     (format #f "set label at ~a,~a \"~a\" font \"DejaVuSans,7\" front textcolor 'dark-gray'"
              median-x median-y punter))))
 
 (define (gp-data-as-str gp-list)
@@ -109,30 +109,55 @@
           mines-strs
           rivers-str)))
 
-(define (game-state->gnuplot my-id punters-count game-map game-state)
-  (let* ((map-sites (game-map-sites game-map))
+(define (game-state->gnuplot rctx my-id punters-count game-map game-state)
+  (let* ((gdata (rc-gdata rctx))
+         (map-sites (game-map-sites game-map))
+         (options (game-state-options game-state))
          (claims-strs (-> (game-state-claims game-state)
                           (->> (hash-map->list cons))
                           (->> (map (lambda (claim)
                                       (let* ((river-def (car claim))
                                              (pid (cdr claim))
+                                             (pidopt (format #f "~a,~a" pid (or (hash-ref options river-def) "")))
                                              (river (apply make-river river-def)))
                                         (if (eq? my-id pid)
-                                            (owned-river->gnuplot river pid "dark-green" map-sites)
-                                            (owned-river->gnuplot river pid "dark-red" map-sites))))))))
-         (last-moves-strs (-> (game-state-moves game-state)
-                              (take punters-count)
-                              (->> (map (lambda (move)
-                                          (let ((claim-def (assoc-ref move 'claim)))
-                                            (if claim-def
-                                                (let ((river (make-river
-                                                              (assoc-ref claim-def 'source)
-                                                              (assoc-ref claim-def 'target)))
-                                                      (pid (assoc-ref claim-def 'punter)))
-                                                  (if (eq? my-id pid)
-                                                      (owned-river->gnuplot river pid "green" map-sites)
-                                                      (owned-river->gnuplot river pid "red" map-sites)))
-                                                "")))))))
+                                            (owned-river->gnuplot river pidopt
+                                                                  "dark-green" map-sites)
+                                            (owned-river->gnuplot river pidopt
+                                                                  "dark-red" map-sites))))))))
+         (last-moves-strs (let ((last-moves (-> (game-state-moves game-state)
+                                                (take punters-count))))
+                            (cons
+                             (format #f "set label at ~a,~a \"~a\" font \"DejaVuSans,10\" front"
+                                     (+ (gmax-x gdata)
+                                        (* 0.2 (gwidth gdata)))
+                                     (- (gmax-y gdata)
+                                        (* 0.1 (gwidth gdata)))
+                                     (-> last-moves
+                                         (->> (map (lambda (move)
+                                                     (format #f "~a" move))))
+                                         (string-join "\\n\\n")))
+                             (map
+                              (lambda (move)
+                                (let ((claim-def (assoc-ref move 'claim)))
+                                  (if claim-def
+                                      (let* ((river (make-river
+                                                     (assoc-ref claim-def 'source)
+                                                     (assoc-ref claim-def 'target)))
+                                             (river-def (list (min (assoc-ref claim-def 'source) (assoc-ref claim-def 'target)
+                                                                   (max (assoc-ref claim-def 'source) (assoc-ref claim-def 'target)))))
+                                             (pid (assoc-ref claim-def 'punter))
+                                             (pidopt (format #f "~a,~a"
+                                                             pid
+                                                             (or (hash-ref options river-def)
+                                                                 ""))))
+                                        (if (eq? my-id pid)
+                                            (owned-river->gnuplot river pidopt
+                                                                  "green" map-sites)
+                                            (owned-river->gnuplot river pidopt
+                                                                  "red" map-sites)))
+                                      "")))
+                              last-moves))))
          (futures-strs (-> (game-state-futures game-state)
                            (hash-ref my-id)
                            (or '())
@@ -159,7 +184,7 @@
            (game-state (rc-game-state rctx))
            (punters-count (game-punters-count game))
            (game-map-strs (game-map->gnuplot (game-game-map game)))
-           (game-state-strs (game-state->gnuplot my-id punters-count (game-game-map game) game-state))
+           (game-state-strs (game-state->gnuplot rctx my-id punters-count (game-game-map game) game-state))
            )
       ; futures first !!!
       (-> (append (list (car game-state-strs))
@@ -213,10 +238,21 @@
 (define (apply-pass-move move)
   #nil)
 
+(define (apply-splurge-move move)
+  (apply-splurge (hash-ref move "punter")
+                 (hash-ref move "route")))
+
+(define (apply-option-move move)
+  (apply-option (hash-ref move "punter")
+                (make-river (hash-ref move "source")
+                            (hash-ref move "target"))))
+
 (define (apply-move move)
   (cond
    ((hash-ref move "claim") (apply-claim-move (hash-ref move "claim")))
    ((hash-ref move "pass")  (apply-pass-move  (hash-ref move "pass")))
+   ((hash-ref move "splurge")  (apply-splurge-move  (hash-ref move "splurge")))
+   ((hash-ref move "option")  (apply-option-move  (hash-ref move "option")))
    (#t (throw 'illegal-state))))
 
 (define (apply-opponent-moves rctx jsval)
@@ -267,8 +303,10 @@
       (gp-exec rctx (to->gnuplot rctx) current-fc)
       (set-rc-fcounter! rctx next-fc)
       (cond
-       ((hash-ref jsval "claim") (apply-claim-move (hash-ref jsval "claim")))
-       ((hash-ref jsval "pass")  (apply-pass-move  (hash-ref jsval "pass"))))
+       ((hash-ref jsval "claim")   (apply-claim-move   (hash-ref jsval "claim")))
+       ((hash-ref jsval "pass")    (apply-pass-move    (hash-ref jsval "pass")))
+       ((hash-ref jsval "splurge") (apply-splurge-move (hash-ref jsval "splurge")))
+       ((hash-ref jsval "option")  (apply-option-move  (hash-ref jsval "option"))))
       (gp-exec rctx (to->gnuplot rctx) next-fc)
       (set-rc-fcounter! rctx next-next-fc))))
 
@@ -306,8 +344,6 @@
 (define (generate-replay replay-file)
   (let ((rctx (make-replay-context -1 #nil #nil))
         (replay-dir (format #f "~a-rep" replay-file)))
-    (when (access? replay-dir)
-      (rmdir replay-dir))
     (mkdir replay-dir)
     (set-rc-replay-dir! rctx replay-dir)
     (with-input-from-file replay-file
