@@ -49,7 +49,7 @@ impl GameStateBuilder for GNGameStateBuilder {
                                     .filter(|&r| !claimed_rivers.contains_key(r))
                                     .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 10000.0) as u64).unwrap_or(0))
                             },
-                            setup.map.rivers.len(),
+                            max(setup.map.rivers.len(), 128),
                             time_avail,
                             &mut mcache,
                             &mut gcache);
