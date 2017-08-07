@@ -65,7 +65,7 @@
 (define (future->gnuplot future map-sites)
   (let ((site-source (site-by-id map-sites (future-source future)))
         (site-target (site-by-id map-sites (future-target future))))
-    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb 'magenta' linewidth 10"
+    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb 'light-magenta' linewidth 10"
             (site-x site-source)
             (site-y site-source)
             (site-x site-target)
@@ -79,7 +79,7 @@
          (median-y (+ (site-y site-source) (/ (- (site-y site-target)
                                                  (site-y site-source)) 2))))
     (string-append
-     (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb '~a' linewidth 5"
+     (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb '~a' linewidth 6"
              (site-x site-source)
              (site-y site-source)
              (site-x site-target)
@@ -139,14 +139,15 @@
                                          (string-join "\\n\\n")))
                              (map
                               (lambda (move)
-                                (let ((claim-def (assoc-ref move 'claim)))
-                                  (if claim-def
+                                (let ((claim-opt-def (or (assoc-ref move 'claim)
+                                                         (assoc-ref move 'option))))
+                                  (if claim-opt-def
                                       (let* ((river (make-river
-                                                     (assoc-ref claim-def 'source)
-                                                     (assoc-ref claim-def 'target)))
-                                             (river-def (list (min (assoc-ref claim-def 'source) (assoc-ref claim-def 'target)
-                                                                   (max (assoc-ref claim-def 'source) (assoc-ref claim-def 'target)))))
-                                             (pid (assoc-ref claim-def 'punter))
+                                                     (assoc-ref claim-opt-def 'source)
+                                                     (assoc-ref claim-opt-def 'target)))
+                                             (river-def (list (min (assoc-ref claim-opt-def 'source) (assoc-ref claim-opt-def 'target)
+                                                                   (max (assoc-ref claim-opt-def 'source) (assoc-ref claim-opt-def 'target)))))
+                                             (pid (assoc-ref claim-opt-def 'punter))
                                              (pidopt (format #f "~a,~a"
                                                              pid
                                                              (or (hash-ref options river-def)
@@ -236,7 +237,7 @@
                            (hash-ref move "target"))))
 
 (define (apply-pass-move move)
-  #nil)
+  (apply-pass (hash-ref move "punter")))
 
 (define (apply-splurge-move move)
   (apply-splurge (hash-ref move "punter")
@@ -264,14 +265,14 @@
          (p-count (game-punters-count game)))
     (with-fluids ((*game* game)
                   (*game-state* game-state))
-      (map
-       (lambda (move)
-         (apply-move move))
-       (filter
-        (lambda (move)
-          (let ((cur-punter (hash-ref (cdar (hash-map->list cons move)) "punter")))
-            (not (eq? cur-punter (rc-my-id rctx)))))
-        moves)))))
+      (->> moves
+           (filter (lambda (move)
+                     (let ((cur-punter (hash-ref
+                                        (cdar (hash-map->list cons move)) "punter")))
+                       (not (eq? cur-punter (rc-my-id rctx))))))
+           (reverse)
+           (map (lambda (move)
+                  (apply-move move)))))))
 
 (define (handle-s->p rctx jsval)
   (cond

@@ -100,16 +100,20 @@
            (apply +))
       0))
 
-(define (river->node djmap claims punter node river)
+(define (river->node djmap claims options punter node river)
   (let* ((current-weight (+ (node-weight node) 1))
          (opp-site (if (eq? (node-site node) (river-source river))
                        (river-target river)
                        (river-source river)))
          (opp-reachable (and (node-reachable? node)
-                             (eq? punter
-                                  (hash-ref claims
-                                            (sort (list (river-source river)
-                                                        (river-target river)) <) #f))))
+                             (or (eq? punter
+                                      (hash-ref claims
+                                                (sort (list (river-source river)
+                                                            (river-target river)) <) #f))
+                                 (eq? punter
+                                      (hash-ref options
+                                                (sort (list (river-source river)
+                                                            (river-target river)) <) #f)))))
          (opp-node (or (find
                         (lambda (node)
                           (eq? opp-site (node-site node)))
@@ -127,7 +131,7 @@
                                (node-finished? opp-node)))
         )))
 
-(define (compute-dijkstra-map djmap claims punter)
+(define (compute-dijkstra-map djmap claims options punter)
   (let* ((min-value-node (-> djmap
                              (->> (filter (lambda (node)
                                             (not (node-finished? node)))))
@@ -139,7 +143,7 @@
                            (set-node-finished min-value-node #t)
                            (map
                             (lambda (river)
-                              (river->node djmap claims punter min-value-node river))
+                              (river->node djmap claims options punter min-value-node river))
                             (connected-rivers (node-site min-value-node))))))
           (compute-dijkstra-map
            (append
@@ -150,13 +154,14 @@
                             upd-nodes))
                     djmap))
            claims
+           options
            punter))
         djmap)))
 
-(define (compute-dijkstra-maps mines claims punter)
+(define (compute-dijkstra-maps mines claims options punter)
   (map
    (lambda (mine-id)
-     (cons mine-id (compute-dijkstra-map `((,mine-id 0 #t #f)) claims punter)))
+     (cons mine-id (compute-dijkstra-map `((,mine-id 0 #t #f)) claims options punter)))
    mines))
 
 (define (game-score)
@@ -164,10 +169,11 @@
          (cur-game-state (fluid-ref *game-state*))
          (all-punters (punters-list (game-punters-count cur-game)))
          (all-mines (game-map-mines (game-game-map cur-game)))
-         (claims (game-state-claims cur-game-state)))
+         (claims (game-state-claims cur-game-state))
+         (options (game-state-options cur-game-state)))
     (map
      (lambda (punter)
-       (let ((punter-dijkstra-maps (compute-dijkstra-maps all-mines claims punter))
+       (let ((punter-dijkstra-maps (compute-dijkstra-maps all-mines claims options punter))
              (futures (hash-ref (game-state-futures cur-game-state) punter)))
          `(,punter . ,(+ (punter-game-score punter punter-dijkstra-maps)
                          (punter-futures-score punter punter-dijkstra-maps futures)))))
@@ -234,6 +240,6 @@
              (not (hash-ref options river-def)))
         (begin
           (hash-set! options river-def punter)
-          (add-game-state-move! cur-game-state (claim-move punter rsource rtarget)))
+          (add-game-state-move! cur-game-state (option-move punter rsource rtarget)))
         (begin
           (add-game-state-move! cur-game-state (pass-move punter))))))
