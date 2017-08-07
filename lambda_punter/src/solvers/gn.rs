@@ -115,6 +115,7 @@ impl GameStateBuilder for GNGameStateBuilder {
             futures: futures,
             mines_connected_sites: HashSet::new(),
             rivers_bw: rivers_bw,
+            options_left: if setup.settings.options { setup.map.mines.len() } else { 0 },
         }
     }
 }
@@ -131,6 +132,7 @@ pub struct GNGameState {
     futures: Option<Vec<Future>>,
     mines_connected_sites: HashSet<SiteId>,
     rivers_bw: RiversIndex<f64>,
+    options_left: usize,
 }
 
 impl GameState for GNGameState {
