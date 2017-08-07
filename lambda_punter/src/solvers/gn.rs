@@ -18,7 +18,7 @@ impl GameStateBuilder for GNGameStateBuilder {
 
     fn build(self, setup: Setup) -> Self::GameState {
         let timeout_start = time::Instant::now();
-        let max_timeout = time::Duration::from_secs(9);
+        let max_timeout = time::Duration::from_secs(8);
 
         // make map graph
         let rivers_graph = Arc::new(Graph::from_map(&setup.map));
