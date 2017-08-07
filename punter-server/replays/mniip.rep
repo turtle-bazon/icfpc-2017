@@ -1,0 +1,249 @@
+    Finished release [optimized] target(s) in 0.0 secs
+     Running `target/release/lambda_punter_online --server-start-port 9139 --server-end-port 9139 gn`
+DEBUG:lambda_punter_online: using solvers::gn
+DEBUG:lambda_punter_online: running slave 1 for game on port 9139
+INFO:lambda_punter_online: playing game on punter.inf.ed.ac.uk:9139 as skobochka (slave 1) 
+DEBUG:lambda_punter::client: P -> S | 18:{"me":"skobochka"}
+DEBUG:lambda_punter::client: S -> P | 20:{"you":"skobochka"}
+
+DEBUG:lambda_punter::client: S -> P | 2689:{"punter":1,"punters":4,"map":{"sites":[{"id":18,"x":-0.75,"y":-1.5},{"id":25,"x":-0.25,"y":-0.5},{"id":4,"x":-1.0,"y":-1.0},{"id":30,"x":-1.25,"y":1.5},{"id":14,"x":-2.0,"y":3.0},{"id":15,"x":2.0,"y":3.0},{"id":31,"x":-1.25,"y":2.5},{"id":12,"x":-1.0,"y":3.0},{"id":8,"x":-1.0,"y":1.0},{"id":1,"x":-0.5,"y":0.0},{"id":23,"x":0.25,"y":0.5},{"id":3,"x":0.0,"y":-1.0},{"id":16,"x":-1.5,"y":-2.0},{"id":24,"x":0.25,"y":-0.5},{"id":21,"x":-1.25,"y":-1.5},{"id":36,"x":0.75,"y":2.5},{"id":26,"x":-0.25,"y":0.5},{"id":11,"x":-1.5,"y":2.0},{"id":9,"x":-0.5,"y":2.0},{"id":13,"x":1.0,"y":3.0},{"id":19,"x":-0.75,"y":-2.5},{"id":32,"x":-1.0,"y":2.0},{"id":17,"x":-1.0,"y":-3.0},{"id":6,"x":0.5,"y":2.0},{"id":27,"x":0.0,"y":0.0},{"id":34,"x":1.25,"y":1.5},{"id":22,"x":-1.0,"y":-2.0},{"id":28,"x":-0.75,"y":2.5},{"id":5,"x":-0.5,"y":-2.0},{"id":33,"x":1.25,"y":2.5},{"id":37,"x":1.0,"y":2.0},{"id":10,"x":1.5,"y":2.0},{"id":0,"x":0.5,"y":0.0},{"id":7,"x":1.0,"y":1.0},{"id":35,"x":0.75,"y":1.5},{"id":29,"x":-0.75,"y":1.5},{"id":2,"x":0.0,"y":1.0},{"id":20,"x":-1.25,"y":-2.5}],"rivers":[{"source":5,"target":18},{"source":4,"target":18},{"source":18,"target":25},{"source":3,"target":25},{"source":1,"target":25},{"source":2,"target":4},{"source":1,"target":4},{"source":11,"target":30},{"source":8,"target":30},{"source":11,"target":14},{"source":10,"target":15},{"source":12,"target":31},{"source":11,"target":31},{"source":1,"target":8},{"source":2,"target":23},{"source":0,"target":23},{"source":3,"target":24},{"source":0,"target":24},{"source":16,"target":21},{"source":4,"target":21},{"source":13,"target":36},{"source":6,"target":36},{"source":2,"target":26},{"source":1,"target":26},{"source":2,"target":9},{"source":17,"target":19},{"source":5,"target":19},{"source":31,"target":32},{"source":30,"target":32},{"source":29,"target":32},{"source":28,"target":32},{"source":2,"target":6},{"source":26,"target":27},{"source":25,"target":27},{"source":24,"target":27},{"source":23,"target":27},{"source":10,"target":34},{"source":7,"target":34},{"source":21,"target":22},{"source":20,"target":22},{"source":19,"target":22},{"source":18,"target":22},{"source":12,"target":28},{"source":9,"target":28},{"source":3,"target":5},{"source":13,"target":33},{"source":10,"target":33},{"source":36,"target":37},{"source":35,"target":37},{"source":34,"target":37},{"source":33,"target":37},{"source":0,"target":7},{"source":23,"target":35},{"source":7,"target":35},{"source":6,"target":35},{"source":26,"target":29},{"source":9,"target":29},{"source":8,"target":29},{"source":17,"target":20},{"source":16,"target":20}],"mines":[27,32,37,22]},"settings":{"splurges":true,"options":true,"futures":true}}
+
+DEBUG:lambda_punter::solvers::gn: guessing a future for mine 27, Duration { secs: 7, nanos: 996862239 } time left
+DEBUG:lambda_punter::solvers::gn: guessed a future from 27 to 14 (path len = 7)
+DEBUG:lambda_punter::solvers::gn: guessing a future for mine 32, Duration { secs: 7, nanos: 856975541 } time left
+DEBUG:lambda_punter::solvers::gn: guessed a future from 32 to 12 (path len = 3)
+DEBUG:lambda_punter::solvers::gn: guessing a future for mine 37, Duration { secs: 7, nanos: 445799239 } time left
+DEBUG:lambda_punter::solvers::gn: cannot estimate any future for mine 37, proceeding with next
+DEBUG:lambda_punter::solvers::gn: guessing a future for mine 22, Duration { secs: 7, nanos: 36787008 } time left
+DEBUG:lambda_punter::solvers::gn: cannot estimate any future for mine 22, proceeding with next
+DEBUG:lambda_punter::solvers::gn: initially choosen 2 goals
+DEBUG:lambda_punter::client: P -> S | 75:{"futures":[{"source":32,"target":12},{"source":27,"target":14}],"ready":1}
+DEBUG:lambda_punter::client: S -> P | 134:{"move":{"moves":[{"claim":{"punter":0,"source":28,"target":32}},{"pass":{"punter":1}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 27 to 14
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 27 to 14: [27, 26, 29, 32, 31, 11, 14]
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: bw_coeff = 48.92382708327982
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: bw_coeff = 71.41594185451588
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: bw_coeff = 65.87756371037304
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: bw_coeff = 40.478449840133024
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 14: bw_coeff = 37
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 26, target: 29 } because of maximum bw_coeff: 71.41594185451588
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":26,"target":29}}
+DEBUG:lambda_punter::client: S -> P | 209:{"move":{"moves":[{"claim":{"punter":0,"source":35,"target":37}},{"claim":{"punter":1,"source":26,"target":29}},{"claim":{"punter":2,"source":36,"target":37}},{"claim":{"punter":3,"source":26,"target":27}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 14 to 27
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 14 to 27: [14, 11, 31, 32, 29, 26, 27]
+DEBUG:lambda_punter::solvers::gn:   -- from 14 to 11: bw_coeff = 37
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: bw_coeff = 40.478449840133024
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: bw_coeff = 65.87756371037304
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27 (NEED OPTION): bw_coeff = 48.92382708327982
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 29, target: 32 } because of maximum bw_coeff: 65.87756371037304
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":29,"target":32}}
+DEBUG:lambda_punter::client: S -> P | 208:{"move":{"moves":[{"claim":{"punter":0,"source":9,"target":28}},{"claim":{"punter":1,"source":29,"target":32}},{"claim":{"punter":2,"source":31,"target":32}},{"claim":{"punter":3,"source":25,"target":27}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 27 to 14
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 27 to 14: [27, 26, 29, 32, 31, 11, 14]
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26 (NEED OPTION): bw_coeff = 48.92382708327982
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31 (NEED OPTION): bw_coeff = 40.478449840133024
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 14: bw_coeff = 37
+DEBUG:lambda_punter::solvers::gn: choosing OPTION River { source: 26, target: 27 } (4 left) because of maximum bw_coeff: 48.92382708327982
+DEBUG:lambda_punter::client: P -> S | 47:{"option":{"punter":1,"source":26,"target":27}}
+DEBUG:lambda_punter::client: S -> P | 158:{"move":{"moves":[{"claim":{"punter":0,"source":2,"target":9}},{"option":{"punter":1,"source":26,"target":27}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 14 to 27
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 14 to 27: [14, 11, 31, 32, 29, 26, 27]
+DEBUG:lambda_punter::solvers::gn:   -- from 14 to 11: bw_coeff = 37
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32 (NEED OPTION): bw_coeff = 40.478449840133024
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing OPTION River { source: 31, target: 32 } (3 left) because of maximum bw_coeff: 40.478449840133024
+DEBUG:lambda_punter::client: P -> S | 47:{"option":{"punter":1,"source":31,"target":32}}
+DEBUG:lambda_punter::client: S -> P | 158:{"move":{"moves":[{"claim":{"punter":0,"source":2,"target":6}},{"option":{"punter":1,"source":31,"target":32}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 27 to 14
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 27 to 14: [27, 26, 29, 32, 31, 11, 14]
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 14: bw_coeff = 37
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 11, target: 14 } because of maximum bw_coeff: 37
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":11,"target":14}}
+DEBUG:lambda_punter::client: S -> P | 158:{"move":{"moves":[{"claim":{"punter":0,"source":6,"target":35}},{"claim":{"punter":1,"source":11,"target":14}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 14 to 27
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 14 to 27: [14, 11, 31, 32, 29, 26, 27]
+DEBUG:lambda_punter::solvers::gn:   -- from 14 to 11: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: bw_coeff = 21.340941893772644
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 11, target: 31 } because of maximum bw_coeff: 21.340941893772644
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":11,"target":31}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":18,"target":22}},{"claim":{"punter":1,"source":11,"target":31}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 27 to 14
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 27 to 14: [27, 26, 29, 32, 31, 11, 14]
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 14: already claimed by me
+DEBUG:lambda_punter::solvers::gn: no route from 27 to 14, proceeding with next
+DEBUG:lambda_punter::solvers::gn: found current goal: from 32 to 12
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 32 to 12: [32, 31, 12]
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 12: bw_coeff = 14.103621625868206
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 12, target: 31 } because of maximum bw_coeff: 14.103621625868206
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":12,"target":31}}
+DEBUG:lambda_punter::client: S -> P | 157:{"move":{"moves":[{"claim":{"punter":0,"source":2,"target":4}},{"claim":{"punter":1,"source":12,"target":31}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 12 to 32
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 12 to 32: [12, 31, 32]
+DEBUG:lambda_punter::solvers::gn:   -- from 12 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn: no route from 12 to 32, proceeding with next
+DEBUG:lambda_punter::solvers::gn: no more goals to reach, choosing a new random one
+DEBUG:lambda_punter::solvers::gn: fallback: new goal is chosen: from 11 (as a part of mine path) to 20
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":17,"target":20}}
+DEBUG:lambda_punter::client: S -> P | 158:{"move":{"moves":[{"claim":{"punter":0,"source":4,"target":18}},{"claim":{"punter":1,"source":17,"target":20}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 11 to 17
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 11 to 17: [11, 31, 32, 29, 26, 27, 25, 18, 22, 20, 17]
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 25 (NEED OPTION): bw_coeff = 44.54829226042874
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 18: bw_coeff = 44.281321149708695
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 22 (NEED OPTION): bw_coeff = 57.102393993050825
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 20: bw_coeff = 36.22855667933734
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 17: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing OPTION River { source: 18, target: 22 } (2 left) because of maximum bw_coeff: 57.102393993050825
+DEBUG:lambda_punter::client: P -> S | 47:{"option":{"punter":1,"source":18,"target":22}}
+DEBUG:lambda_punter::client: S -> P | 160:{"move":{"moves":[{"claim":{"punter":0,"source":23,"target":27}},{"option":{"punter":1,"source":18,"target":22}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 17 to 11
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 17 to 11: [17, 20, 22, 18, 25, 27, 26, 29, 32, 31, 11]
+DEBUG:lambda_punter::solvers::gn:   -- from 17 to 20: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 22: bw_coeff = 36.22855667933734
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 18: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 25: bw_coeff = 44.281321149708695
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 27 (NEED OPTION): bw_coeff = 44.54829226042874
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing OPTION River { source: 25, target: 27 } (1 left) because of maximum bw_coeff: 44.54829226042874
+DEBUG:lambda_punter::client: P -> S | 47:{"option":{"punter":1,"source":25,"target":27}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":2,"target":23}},{"option":{"punter":1,"source":25,"target":27}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 11 to 17
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 11 to 17: [11, 31, 32, 29, 26, 27, 25, 18, 22, 20, 17]
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 25: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 18: bw_coeff = 44.281321149708695
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 22: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 20: bw_coeff = 36.22855667933734
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 17: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 18, target: 25 } because of maximum bw_coeff: 44.281321149708695
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":18,"target":25}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":33,"target":37}},{"claim":{"punter":1,"source":18,"target":25}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 17 to 11
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 17 to 11: [17, 20, 22, 18, 25, 27, 26, 29, 32, 31, 11]
+DEBUG:lambda_punter::solvers::gn:   -- from 17 to 20: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 22: bw_coeff = 36.22855667933734
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 18: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 25: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 11: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 20, target: 22 } because of maximum bw_coeff: 36.22855667933734
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":20,"target":22}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":10,"target":33}},{"claim":{"punter":1,"source":20,"target":22}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 11 to 17
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 11 to 17: [11, 31, 32, 29, 26, 27, 25, 18, 22, 20, 17]
+DEBUG:lambda_punter::solvers::gn:   -- from 11 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 25: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 18: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 22: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 20: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 17: already claimed by me
+DEBUG:lambda_punter::solvers::gn: no route from 11 to 17, proceeding with next
+DEBUG:lambda_punter::solvers::gn: no more goals to reach, choosing a new random one
+DEBUG:lambda_punter::solvers::gn: fallback: new goal is chosen: from 17 (as a part of mine path) to 28
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":12,"target":28}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":10,"target":15}},{"claim":{"punter":1,"source":12,"target":28}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 17 to 12
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 17 to 12: [17, 20, 22, 18, 25, 27, 26, 29, 32, 31, 12]
+DEBUG:lambda_punter::solvers::gn:   -- from 17 to 20: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 22: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 18: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 25: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 26: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 26 to 29: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 29 to 32: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 32 to 31: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 31 to 12: already claimed by me
+DEBUG:lambda_punter::solvers::gn: no route from 17 to 12, proceeding with next
+DEBUG:lambda_punter::solvers::gn: no more goals to reach, choosing a new random one
+DEBUG:lambda_punter::solvers::gn: fallback: new goal is chosen: from 17 (as a part of mine path) to 34
+DEBUG:lambda_punter::client: P -> S | 46:{"claim":{"punter":1,"source":10,"target":34}}
+DEBUG:lambda_punter::client: S -> P | 159:{"move":{"moves":[{"claim":{"punter":0,"source":13,"target":33}},{"claim":{"punter":1,"source":10,"target":34}},{"pass":{"punter":2}},{"pass":{"punter":3}}]}}
+
+DEBUG:lambda_punter::solvers::gn: found current goal: from 17 to 10
+DEBUG:lambda_punter::solvers::gn: there is a path for goal from 17 to 10: [17, 20, 22, 18, 25, 27, 24, 0, 7, 34, 10]
+DEBUG:lambda_punter::solvers::gn:   -- from 17 to 20: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 20 to 22: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 22 to 18: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 18 to 25: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 25 to 27: already claimed by me
+DEBUG:lambda_punter::solvers::gn:   -- from 27 to 24: bw_coeff = 31.959751245840692
+DEBUG:lambda_punter::solvers::gn:   -- from 24 to 0: bw_coeff = 49.829858501869886
+DEBUG:lambda_punter::solvers::gn:   -- from 0 to 7: bw_coeff = 57.19484299743652
+DEBUG:lambda_punter::solvers::gn:   -- from 7 to 34: bw_coeff = 58.17943463809921
+DEBUG:lambda_punter::solvers::gn:   -- from 34 to 10: already claimed by me
+DEBUG:lambda_punter::solvers::gn: choosing CLAIM River { source: 7, target: 34 } because of maximum bw_coeff: 58.17943463809921
+DEBUG:lambda_punter::client: P -> S | 45:{"claim":{"punter":1,"source":7,"target":34}}
+DEBUG:lambda_punter::client: S -> P | 219:{"stop":{"moves":[{"pass":{"punter":0}},{"pass":{"punter":1}},{"pass":{"punter":2}},{"pass":{"punter":3}}],"scores":[{"punter":0,"score":1230},{"punter":1,"score":925},{"punter":2,"score":-26},{"punter":3,"score":2}]}}
+
+DEBUG:lambda_punter::solvers::gn: STOP command invoked
+DEBUG:lambda_punter::solvers::gn: future from 32 to 12: SUCCESS
+DEBUG:lambda_punter::solvers::gn: future from 27 to 14: SUCCESS
+SUCCESS for game port 9139:
+  Punter: 0, score: 1230
+  Punter: 1 (it's me), score: 925
+  Punter: 2, score: -26
+  Punter: 3, score: 2
+ == OVERALL GAMES STAT: 0 wins / 0 draws / 1 loses (0% winrate) == 
+My loses:
+ * Port 9139, punter: 1, scores: [Score { punter: 0, score: 1230 }, Score { punter: 1, score: 925 }, Score { punter: 2, score: -26 }, Score { punter: 3, score: 2 }]
+INFO:lambda_punter_online: graceful shutdown
