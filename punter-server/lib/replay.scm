@@ -16,13 +16,24 @@
 
 (define _PUNTER_TO_SERVER_ "P -> S")
 
+(define-record-type gdata
+  (make-gdata min-x max-x min-y max-y width height)
+  gdata?
+  (min-x gmin-x)
+  (max-x gmax-x)
+  (min-y gmin-y)
+  (max-y gmax-y)
+  (width gwidth)
+  (height gheight))
+
 (define-record-type replay-context
   (make-replay-context my-id game game-state)
   replay-context?
   (my-id rc-my-id set-rc-my-id!)
   (game rc-game set-rc-game!)
   (game-state rc-game-state set-rc-game-state!)
-  (f-counter rc-fcounter set-rc-fcounter!))
+  (f-counter rc-fcounter set-rc-fcounter!)
+  (gdata rc-gdata set-rc-gdata!))
 
 (define (site-by-id sites id)
   (find
@@ -50,23 +61,15 @@
             (site-x site-target)
             (site-y site-target))))
 
-(define (my-river->gnuplot river map-sites)
+(define (owned-river->gnuplot river color map-sites)
   (let ((site-source (site-by-id map-sites (river-source river)))
         (site-target (site-by-id map-sites (river-target river))))
-    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb 'green' linewidth 5"
+    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb '~a' linewidth 5"
             (site-x site-source)
             (site-y site-source)
             (site-x site-target)
-            (site-y site-target))))
-
-(define (claimed-river->gnuplot river map-sites)
-  (let ((site-source (site-by-id map-sites (river-source river)))
-        (site-target (site-by-id map-sites (river-target river))))
-    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb 'red' linewidth 5"
-            (site-x site-source)
-            (site-y site-source)
-            (site-x site-target)
-            (site-y site-target))))
+            (site-y site-target)
+            color)))
 
 (define (gp-data-as-str gp-list)
   (-> gp-list
@@ -88,7 +91,7 @@
           mines-strs
           rivers-str)))
 
-(define (game-state->gnuplot my-id game-map game-state)
+(define (game-state->gnuplot my-id punters-count game-map game-state)
   (let* ((map-sites (game-map-sites game-map))
          (claims-strs (-> (game-state-claims game-state)
                           (->> (hash-map->list cons))
@@ -96,16 +99,27 @@
                                       (let* ((river-def (car claim))
                                              (pid (cdr claim))
                                              (river (apply make-river river-def)))
+                                        (flog-msg 'DEBUG "fff")
                                         (if (eq? my-id pid)
-                                            (my-river->gnuplot river map-sites)
-                                            (claimed-river->gnuplot river map-sites)))))))))
-    (list claims-strs)))
+                                            (owned-river->gnuplot river "dark-green" map-sites)
+                                            (owned-river->gnuplot river "dark-red" map-sites))))))))
+         (last-moves-strs (-> (game-state-moves game-state)
+                              (take punters-count)
+                              (->> (map (lambda (move)
+                                          (let ((claim-def (assoc-ref move 'claim)))
+                                            (if claim-def
+                                                (let ((river (make-river
+                                                              (assoc-ref claim-def 'source)
+                                                              (assoc-ref claim-def 'target)))
+                                                      (pid (assoc-ref claim-def 'punter)))
+                                                  (if (eq? my-id pid)
+                                                      (owned-river->gnuplot river "green" map-sites)
+                                                      (owned-river->gnuplot river "red" map-sites)))
+                                                ""))))))))
+    (list claims-strs
+          last-moves-strs)))
 
-(define (gp-prelude rctx)
-  (list (list "set terminal png size 640, 640"
-              "set output '/tmp/tri.png'")))
-
-(define (gp-footer rctx)
+(define (to->gnuplot rctx)
   (let* ((map-sites (game-map-sites (game-game-map (rc-game rctx))))
          (map-xs (map site-x map-sites))
          (map-ys (map site-y map-sites))
@@ -115,37 +129,41 @@
          (max-y (apply max map-ys))
          (width (- max-x min-x))
          (height (- max-y min-y))
+         (aspect (/ width height)))
+    (set-rc-gdata! rctx (make-gdata min-x max-x min-y max-y width height))
+    (let* ((my-id (rc-my-id rctx))
+           (game (rc-game rctx))
+           (game-state (rc-game-state rctx))
+           (punters-count (game-punters-count game))
+           (game-map-strs (game-map->gnuplot (game-game-map game)))
+           (game-state-strs (game-state->gnuplot my-id punters-count (game-game-map game) game-state)))
+      (-> (append game-map-strs
+                  game-state-strs)
+          (gp-data-as-str)))))
+
+(define (gp-exec rctx plot-prog frame-number)
+  (let* ((gdata (rc-gdata rctx))
+         (height (gheight gdata))
+         (width (+ (gwidth gdata) height))
          (x-border (* 0.2 width))
          (y-border (* 0.2 height))
          (border (min x-border y-border)))
-    (list (list "unset key"
-                "unset tics"
-                "unset border"
-                (format #f"plot [~a:~a] [~a:~a] 1/0 linewidth 0"
-                        (- min-x border)
-                        (+ max-x border)
-                        (- min-y border)
-                        (+ max-y border))))))
-
-(define (to->gnuplot rctx)
-  (let* ((my-id (rc-my-id rctx))
-         (game (rc-game rctx))
-         (game-state (rc-game-state rctx))
-         (game-map-strs (game-map->gnuplot (game-game-map game)))
-         (game-state-strs (game-state->gnuplot my-id (game-game-map game) game-state))
-         (gp-footer-strs (gp-footer rctx)))
-    (-> (append game-map-strs
-                game-state-strs
-                gp-footer-strs)
-        (gp-data-as-str))))
-
-(define (gp-exec plot-prog frame-number)
-  (let ((w-port (open-output-pipe "gnuplot")))
-    (format w-port "set terminal png size 640, 640~&")
-    (format w-port "set output '/tmp/tri~5,,,'0@a.png~&" frame-number)
-    (display plot-prog w-port)
-    (when (not (eqv? 0 (status:exit-val (close-pipe w-port))))
-      (throw 'gnuplot-error))))
+    (let ((w-port (open-output-pipe "gnuplot")))
+      (format w-port "set terminal png size ~a, ~a~&"
+              (* 1080 (/ (+ width (* 2 border))
+                         (+ height (* 2 border)))) 1080)
+      (format w-port "set output '/tmp/tri~5,,,'0@a.png'~&" frame-number)
+      (display plot-prog w-port) (newline w-port)
+      (format w-port "unset key~&")
+      (format w-port "unset tics~&")
+      (format w-port "unset border~&")
+      (format w-port "plot [~a:~a] [~a:~a] 1/0~&"
+              (- (gmin-x gdata) border)
+              (+ (+ (gmin-x gdata) width) border)
+              (- (gmin-y gdata) border)
+              (+ (+ (gmin-y gdata) height) border))
+      (when (not (eqv? 0 (status:exit-val (close-pipe w-port))))
+        (throw 'gnuplot-error)))))
 
 (define (setup-game rctx jsval)
   (let* ((my-id (hash-ref jsval "punter"))
@@ -208,14 +226,14 @@
          (next-next-fc (+ next-fc 1))
          (game (rc-game rctx))
          (game-state (rc-game-state rctx)))
-    (gp-exec (to->gnuplot rctx) current-fc)
+    (gp-exec rctx (to->gnuplot rctx) current-fc)
     (set-rc-fcounter! rctx next-fc)
     (with-fluids ((*game* game)
                   (*game-state* game-state))
       (cond
        ((hash-ref jsval "claim") (apply-claim-move (hash-ref jsval "claim")))
        ((hash-ref jsval "pass")  (apply-pass-move  (hash-ref jsval "pass")))))
-    (gp-exec (to->gnuplot rctx) next-fc)
+    (gp-exec rctx (to->gnuplot rctx) next-fc)
     (set-rc-fcounter! rctx next-next-fc)))
 
 (define (handle-p->s rctx jsval)
