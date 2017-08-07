@@ -47,7 +47,7 @@ impl GameStateBuilder for GNGameStateBuilder {
                                 path_rivers
                                     .iter()
                                     .filter(|&r| !claimed_rivers.contains_key(r))
-                                    .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 10000.0) as u64).unwrap_or(0))
+                                    .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
                             },
                             max(setup.map.rivers.len(), 128),
                             time_avail,
@@ -229,7 +229,7 @@ impl GNGameState {
         for move_ in moves {
             match move_ {
                 Move::Claim { punter, source, target, } => {
-                    self.claimed_rivers.insert(River::new(source, target), 1 << punter);
+                    self.claimed_rivers.insert(River::new(source, target), (1 << punter));
                 },
                 Move::Pass { .. } =>
                     (),
