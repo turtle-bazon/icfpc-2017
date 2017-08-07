@@ -33,9 +33,17 @@ impl GameStateBuilder for GNGameStateBuilder {
             let mut mcache = Default::default();
             let mut futures_estimated = Vec::with_capacity(setup.map.mines.len());
             let mut start_turn = 0;
+            let mut iter_delay = None;
             for &mine in setup.map.mines.iter() {
                 if let Some(time_avail) = max_timeout.checked_sub(timeout_start.elapsed()) {
-                    debug!("guessing a future for mine {}, {:?} time left", mine, time_avail);
+                    if let Some(prev_delay) = iter_delay {
+                        if time_avail < prev_delay {
+                            debug!("prev estimation was {:?}, but we have only {:?} time left, so let's skip the rest", prev_delay, time_avail);
+                            break;
+                        }
+                    }
+                    debug!("guessing a future for mine {}, {:?} time left, prev: {:?}", mine, time_avail, iter_delay);
+                    let estimate_start = time::Instant::now();
                     let future_guess =
                         prob::estimate_best_future(
                             &rivers_graph,
@@ -51,10 +59,11 @@ impl GameStateBuilder for GNGameStateBuilder {
                                     .filter(|&r| !claimed_rivers.contains_key(r))
                                     .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
                             },
-                            max(setup.map.rivers.len(), 128),
+                            min(max(setup.map.rivers.len(), 128), 1024),
                             time_avail,
                             &mut mcache,
                             &mut gcache);
+                    iter_delay = Some(estimate_start.elapsed());
                     if let Some((source, target, path_len)) = future_guess {
                         debug!("guessed a future from {} to {} (path len = {})", source, target, path_len);
                         futures_estimated.push(Future { source: source, target: target, });
