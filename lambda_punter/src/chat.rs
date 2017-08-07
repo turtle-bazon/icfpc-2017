@@ -45,7 +45,7 @@ pub fn run_online<S, FS, SR, FR, RR, GB>(
                 return Err(Error::UnexpectedSetupRep(other)),
         };
     // P → S {"ready" : p}
-    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: None, }, None)
+    send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: game_state.get_futures(), }, None)
         .map_err(Error::Send)?;
     // gameplay
     loop {
@@ -93,9 +93,9 @@ pub fn run_offline<S, FS, SR, FR, RR, GB>(
     match recv_fn(&mut fn_state).map_err(Error::Recv)? {
         // S → P {"punter" : p, "punters" : n, "map" : map}
         (Rep::Setup(setup), None) => {
-            let game_state = gs_builder.build(setup);
+            let mut game_state = gs_builder.build(setup);
             // P → S {"ready" : p, "state" : state}
-            send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: None, }, Some(game_state))
+            send_fn(&mut fn_state, Req::Ready { punter: game_state.get_punter(), futures: game_state.get_futures(), }, Some(game_state))
                 .map_err(Error::Send)
                 .map(|()| None)
         },
