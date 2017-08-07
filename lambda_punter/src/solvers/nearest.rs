@@ -122,6 +122,10 @@ impl NearestGameState {
                         }
                         punter
                     },
+                    Move::Option { punter, source, target, } => {
+                        update_river(source, target);
+                        punter
+                    },
                 }
             };
             self.moves
