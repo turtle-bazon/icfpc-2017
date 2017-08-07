@@ -426,10 +426,13 @@ impl GNGameState {
                     .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, })
             }, gcache);
             if let Some((best_cost, best_path, best_target)) = best {
-                debug!("fallback: going path {:?} with best cost = {}", best_path, best_cost);
-                return Some((best_path, mine, best_target));
+                if best_path.len() > 1 {
+                    debug!("fallback: going path {:?} with best cost = {}", best_path, best_cost);
+                    return Some((best_path, mine, best_target));
+                }
             }
         }
+        debug!("fallback: none found");
         None
     }
 }
