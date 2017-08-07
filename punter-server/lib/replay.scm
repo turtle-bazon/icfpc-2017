@@ -33,7 +33,8 @@
   (game rc-game set-rc-game!)
   (game-state rc-game-state set-rc-game-state!)
   (f-counter rc-fcounter set-rc-fcounter!)
-  (gdata rc-gdata set-rc-gdata!))
+  (gdata rc-gdata set-rc-gdata!)
+  (replay-dir rc-replay-dir set-rc-replay-dir!))
 
 (define (site-by-id sites id)
   (find
@@ -179,7 +180,7 @@
       (format w-port "set terminal png size ~a, ~a~&"
               (* 1080 (/ (+ width (* 2 border))
                          (+ height (* 2 border)))) 1080)
-      (format w-port "set output '/tmp/tri~5,,,'0@a.png'~&" frame-number)
+      (format w-port "set output '~a/~5,,,'0@a.png'~&" (rc-replay-dir rctx) frame-number)
       (display plot-prog w-port) (newline w-port)
       (format w-port "unset key~&")
       (format w-port "unset tics~&")
@@ -252,7 +253,8 @@
                                (lambda (future-js)
                                  (make-future (hash-ref future-js "source")
                                               (hash-ref future-js "target")))
-                               (hash-ref jsval "futures"))))))
+                               (or (hash-ref jsval "futures")
+                                   '()))))))
 
 (define (handle-my-moves rctx jsval)
   (let* ((current-fc (rc-fcounter rctx))
@@ -301,8 +303,13 @@
                 (string=? info-type _PUNTER_TO_SERVER_)) (handle-protocol-message rctx info-type info-data))
            (#t (handle-unknown-message rctx info-data))))))))
 
-(define (generate-replay replay-file output-dir)
-  (let ((rctx (make-replay-context -1 #nil #nil)))
+(define (generate-replay replay-file)
+  (let ((rctx (make-replay-context -1 #nil #nil))
+        (replay-dir (format #f "~a-rep" replay-file)))
+    (when (access? replay-dir)
+      (rmdir replay-dir))
+    (mkdir replay-dir)
+    (set-rc-replay-dir! rctx replay-dir)
     (with-input-from-file replay-file
       (lambda ()
         (let loop ((line (read-line)))
