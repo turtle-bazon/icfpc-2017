@@ -70,15 +70,23 @@
             (site-x site-target)
             (site-y site-target))))
 
-(define (owned-river->gnuplot river color map-sites)
-  (let ((site-source (site-by-id map-sites (river-source river)))
-        (site-target (site-by-id map-sites (river-target river))))
-    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb '~a' linewidth 5"
-            (site-x site-source)
-            (site-y site-source)
-            (site-x site-target)
-            (site-y site-target)
-            color)))
+(define (owned-river->gnuplot river punter color map-sites)
+  (let* ((site-source (site-by-id map-sites (river-source river)))
+         (site-target (site-by-id map-sites (river-target river)))
+         (median-x (+ (site-x site-source) (/ (- (site-x site-target)
+                                                 (site-x site-source)) 2)))
+         (median-y (+ (site-y site-source) (/ (- (site-y site-target)
+                                                 (site-y site-source)) 2))))
+    (string-append
+     (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb '~a' linewidth 5"
+             (site-x site-source)
+             (site-y site-source)
+             (site-x site-target)
+             (site-y site-target)
+             color)
+     ";"
+     (format #f "set label at ~a,~a \"~a\" font \"DejaVuSans,15\" front textcolor 'gray'"
+             median-x median-y punter))))
 
 (define (gp-data-as-str gp-list)
   (-> gp-list
@@ -109,8 +117,8 @@
                                              (pid (cdr claim))
                                              (river (apply make-river river-def)))
                                         (if (eq? my-id pid)
-                                            (owned-river->gnuplot river "dark-green" map-sites)
-                                            (owned-river->gnuplot river "dark-red" map-sites))))))))
+                                            (owned-river->gnuplot river pid "dark-green" map-sites)
+                                            (owned-river->gnuplot river pid "dark-red" map-sites))))))))
          (last-moves-strs (-> (game-state-moves game-state)
                               (take punters-count)
                               (->> (map (lambda (move)
@@ -121,8 +129,8 @@
                                                               (assoc-ref claim-def 'target)))
                                                       (pid (assoc-ref claim-def 'punter)))
                                                   (if (eq? my-id pid)
-                                                      (owned-river->gnuplot river "green" map-sites)
-                                                      (owned-river->gnuplot river "red" map-sites)))
+                                                      (owned-river->gnuplot river pid "green" map-sites)
+                                                      (owned-river->gnuplot river pid "red" map-sites)))
                                                 "")))))))
          (futures-strs (-> (game-state-futures game-state)
                            (hash-ref my-id)
@@ -150,11 +158,14 @@
            (game-state (rc-game-state rctx))
            (punters-count (game-punters-count game))
            (game-map-strs (game-map->gnuplot (game-game-map game)))
-           (game-state-strs (game-state->gnuplot my-id punters-count (game-game-map game) game-state)))
+           (game-state-strs (game-state->gnuplot my-id punters-count (game-game-map game) game-state))
+           )
       ; futures first !!!
       (-> (append (list (car game-state-strs))
                   game-map-strs
-                  (cdr game-state-strs))
+                  (cdr game-state-strs)
+                  (list (list (format #f "set label at ~a,~a \"~a\" font \"DejaVuSans,30\" front"
+                                      (+ max-x (* 0.2 width)) max-y (game-score)))))
           (gp-data-as-str)))))
 
 (define (gp-exec rctx plot-prog frame-number)
@@ -249,15 +260,15 @@
          (next-next-fc (+ next-fc 1))
          (game (rc-game rctx))
          (game-state (rc-game-state rctx)))
-    (gp-exec rctx (to->gnuplot rctx) current-fc)
-    (set-rc-fcounter! rctx next-fc)
     (with-fluids ((*game* game)
                   (*game-state* game-state))
+      (gp-exec rctx (to->gnuplot rctx) current-fc)
+      (set-rc-fcounter! rctx next-fc)
       (cond
        ((hash-ref jsval "claim") (apply-claim-move (hash-ref jsval "claim")))
-       ((hash-ref jsval "pass")  (apply-pass-move  (hash-ref jsval "pass")))))
-    (gp-exec rctx (to->gnuplot rctx) next-fc)
-    (set-rc-fcounter! rctx next-next-fc)))
+       ((hash-ref jsval "pass")  (apply-pass-move  (hash-ref jsval "pass"))))
+      (gp-exec rctx (to->gnuplot rctx) next-fc)
+      (set-rc-fcounter! rctx next-next-fc))))
 
 (define (handle-p->s rctx jsval)
   (cond

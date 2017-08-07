@@ -73,9 +73,7 @@
 (define (punter-game-score punter dijkstra-maps)
   (->> dijkstra-maps
       (map cdr)
-      (cons node-less?)
-      (reverse)
-      (apply merge)
+      (apply append)
       (map (lambda (node)
              (if (node-reachable? node)
                  (* (node-weight node) (node-weight node))
@@ -141,14 +139,13 @@
                               (river->node djmap claims punter min-value-node river))
                             (connected-rivers (node-site min-value-node))))))
           (compute-dijkstra-map
-           (merge
+           (append
             upd-nodes
             (remove (lambda (node-in)
                       (find (lambda (node)
                               (node-eq? node-in node))
                             upd-nodes))
-                    djmap)
-            node-less?)
+                    djmap))
            claims
            punter))
         djmap)))
