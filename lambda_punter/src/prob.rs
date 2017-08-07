@@ -3,6 +3,7 @@ use rand::distributions::{Weighted, WeightedChoice, IndependentSample};
 
 use super::types::{SiteId, PunterId};
 use super::map::{River, RiversIndex};
+use super::graph::{Graph, GraphCache, EdgeAttr, StepCommand};
 
 #[derive(Default)]
 pub struct MonteCarloCache {
@@ -123,13 +124,78 @@ pub fn journey_success_simulate<F>(
     Some(success_count as f64 / games_count as f64)
 }
 
+pub fn estimate_best_future<F>(
+    graph: &Graph,
+    mine: SiteId,
+    mines: &[SiteId],
+    rivers_bw: &RiversIndex<f64>,
+    my_punter: PunterId,
+    punters_count: usize,
+    make_move: F,
+    games_count: usize,
+    mcache: &mut MonteCarloCache,
+    gcache: &mut GraphCache<f64>,
+)
+    -> Option<(SiteId, SiteId)>
+    where F: for<'a> Fn(&'a [River], &RiversIndex<PunterId>) -> Option<&'a River>
+{
+    let mut best = None;
+    println!(" ;; starting `estimate_best_future`");
+    graph.generic_bfs(mine, 0.0, |path, cost, prev_reward| {
+        println!(" ;; step_fn({:?}, {}, {})", path, cost, prev_reward);
+        if let (Some(&source), Some(&target)) = (path.first(), path.last()) {
+            if mines.iter().any(|&m| m == target) {
+                println!(" ;; target {} is a mine! zeroing reward", target);
+                StepCommand::Continue(0.0)
+            } else {
+                let maybe_prob = journey_success_simulate(
+                    path,
+                    rivers_bw,
+                    my_punter,
+                    punters_count,
+                    &make_move,
+                    games_count,
+                    mcache);
+                println!(" ;; simulation results for {:?} is {:?}", path, maybe_prob);
+                if let Some(prob) = maybe_prob {
+                    let reward = cost * cost * cost;
+                    let expected_reward = reward as f64 * prob;
+                    println!(" ;; expected reward for path {:?} is {} (prev was {})", path, expected_reward, prev_reward);
+                    // track the best future candidate
+                    best = Some(if let Some((best_reward, best_fut)) = best.take() {
+                        if best_reward < expected_reward {
+                            (expected_reward, (source, target))
+                        } else {
+                            (best_reward, best_fut)
+                        }
+                    } else {
+                        (expected_reward, (source, target))
+                    });
+                    // check if there is no sense to move futher
+                    if &expected_reward > prev_reward {
+                        StepCommand::Continue(expected_reward)
+                    } else {
+                        StepCommand::Stop
+                    }
+                } else {
+                    StepCommand::Stop
+                }
+            }
+        } else {
+            StepCommand::Stop
+        }
+    }, EdgeAttr::standard, gcache);
+
+    best.map(|v| v.1)
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashSet;
     use super::super::types::PunterId;
     use super::super::graph::Graph;
     use super::super::map::{River, RiversIndex};
-    use super::journey_success_simulate;
+    use super::{journey_success_simulate, estimate_best_future};
 
     fn sample_map() -> (Graph, RiversIndex<f64>) {
         let graph = Graph::from_iter(
@@ -148,15 +214,15 @@ mod test {
     #[test]
     fn sample_map_simulation_always_success() {
         let (_, rivers_bw) = sample_map();
-        let mut pcache = Default::default();
+        let mut mcache = Default::default();
 
-        let prob = journey_success_simulate(&[1, 0], &rivers_bw, 0, 2, make_move, 100, &mut pcache);
+        let prob = journey_success_simulate(&[1, 0], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 2], &rivers_bw, 0, 2, make_move, 100, &mut pcache);
+        let prob = journey_success_simulate(&[1, 2], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 3], &rivers_bw, 0, 2, make_move, 100, &mut pcache);
+        let prob = journey_success_simulate(&[1, 3], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 7], &rivers_bw, 0, 2, make_move, 100, &mut pcache);
+        let prob = journey_success_simulate(&[1, 7], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
     }
 
@@ -164,7 +230,7 @@ mod test {
     fn sample_map_simulation() {
         let (graph, rivers_bw) = sample_map();
         let mut gcache = Default::default();
-        let mut pcache = Default::default();
+        let mut mcache = Default::default();
 
         let all_other_sites: HashSet<_> = rivers_bw
             .iter()
@@ -173,9 +239,9 @@ mod test {
         let mut results: Vec<_> = all_other_sites
             .into_iter()
             .filter(|&site| site != 1)
-            .flat_map(|target| graph.shortest_path_only(1, target, &mut gcache).map(|v| v.to_owned()))
+            .flat_map(|target| graph.shortest_path_only::<()>(1, target, &mut gcache).map(|v| v.to_owned()))
             .map(|route| {
-                let prob = journey_success_simulate(&route, &rivers_bw, 1, 2, make_move, 10000, &mut pcache);
+                let prob = journey_success_simulate(&route, &rivers_bw, 1, 2, make_move, 10000, &mut mcache);
                 (route, prob)
             })
             .collect();
@@ -187,6 +253,27 @@ mod test {
         assert!((results[4].0.last().unwrap() == &3) || (results[4].0.last().unwrap() == &7));
         assert!((results[5].0.last().unwrap() == &0) || (results[5].0.last().unwrap() == &2));
         assert!((results[6].0.last().unwrap() == &0) || (results[6].0.last().unwrap() == &2));
+        // results are something like these:
+        // [
+        //     ([1, 3, 5], Some(0.7036)),
+        //     ([1, 3, 4], Some(0.7481)),
+        //     ([1, 7, 6], Some(0.752)),
+        //     ([1, 7], Some(0.9015)),
+        //     ([1, 3], Some(0.9028)),
+        //     ([1, 2], Some(0.9221)),
+        //     ([1, 0], Some(0.9236)),
+        // ]
+    }
+
+    #[test]
+    fn sample_map_best_future() {
+        let (graph, rivers_bw) = sample_map();
+        let mut gcache = Default::default();
+        let mut mcache = Default::default();
+
+        let future =
+            estimate_best_future(&graph, 1, &[1, 5], &rivers_bw, 1, 2, make_move, 10000, &mut mcache, &mut gcache).unwrap();
+        assert_eq!(future, (0, 0));
     }
 
 }
