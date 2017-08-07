@@ -46,6 +46,10 @@ pub fn journey_success_simulate<F>(
         offset += 1;
     }
 
+    // calculate scale coeff for bw values
+    let bw_sum: f64 = rivers_bw.values().sum();
+    let bw_scale = (u32::max_value() as f64) / bw_sum;
+
     // play `games_count` times and gather stats
     let mut success_count = 0;
     for _ in 0 .. games_count {
@@ -56,6 +60,7 @@ pub fn journey_success_simulate<F>(
             my_punter: PunterId,
             punters_count: usize,
             make_move: F,
+            bw_scale: f64,
             cache: &mut MonteCarloCache,
         )
             -> Outcome
@@ -101,7 +106,7 @@ pub fn journey_success_simulate<F>(
                                 .iter()
                                 .filter(|&(river, _)| !claimed_rivers.contains_key(river))
                                 .map(|(river, bw_coeff)| Weighted {
-                                    weight: (bw_coeff * 1000.0) as u32,
+                                    weight: (bw_coeff * bw_scale) as u32,
                                     item: river.clone(),
                                 }));
                         let choice = WeightedChoice::new(&mut cache.weighted);
@@ -115,7 +120,7 @@ pub fn journey_success_simulate<F>(
             }
         }
 
-        match play(rivers_bw, my_punter, punters_count, &make_move, cache) {
+        match play(rivers_bw, my_punter, punters_count, &make_move, bw_scale, cache) {
             Outcome::Success =>
                 success_count += 1,
             Outcome::Fail =>
