@@ -165,23 +165,29 @@ pub fn estimate_best_future<F>(
                     games_count,
                     mcache);
                 if let Some(prob) = maybe_prob {
-                    let reward = cost * cost * cost;
-                    let expected_reward = reward as f64 * prob;
-                    // track the best future candidate
-                    best = Some(if let Some((best_reward, best_fut)) = best.take() {
-                        if best_reward < expected_reward {
-                            (expected_reward, (source, target))
+                    let regular_reward = cost * cost;
+                    let future_reward = cost * cost * cost;
+                    let expected_reward = future_reward as f64 * prob;
+                    // check if it is worth to take this future
+                    if expected_reward < regular_reward as f64 {
+                        StepCommand::Continue(0.0)
+                    } else {
+                        // track the best future candidate
+                        best = Some(if let Some((best_reward, best_fut)) = best.take() {
+                            if best_reward < expected_reward {
+                                (expected_reward, (source, target))
+                            } else {
+                                (best_reward, best_fut)
+                            }
                         } else {
-                            (best_reward, best_fut)
+                            (expected_reward, (source, target))
+                        });
+                        // check if there is no sense to move futher
+                        if &expected_reward > prev_reward {
+                            StepCommand::Continue(expected_reward)
+                        } else {
+                            StepCommand::Stop
                         }
-                    } else {
-                        (expected_reward, (source, target))
-                    });
-                    // check if there is no sense to move futher
-                    if &expected_reward > prev_reward {
-                        StepCommand::Continue(expected_reward)
-                    } else {
-                        StepCommand::Stop
                     }
                 } else {
                     StepCommand::Stop

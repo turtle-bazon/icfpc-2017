@@ -7,7 +7,7 @@ use super::super::types::{PunterId, SiteId};
 use super::super::map::{River, RiversIndex};
 use super::super::proto::{Move, Setup, Future};
 use super::super::game::{GameState, GameStateBuilder};
-use super::super::graph::{Graph, GraphCache, EdgeAttr};
+use super::super::graph::{Graph, GraphCache, EdgeAttr, StepCommand};
 use super::super::prob;
 
 pub struct GNGameStateBuilder;
@@ -147,8 +147,17 @@ impl GameState for GNGameState {
                 let maybe_path = self.shortest_path(source, target, &mut gcache);
                 if let Some(path) = maybe_path {
                     debug!("there is a path for goal from {} to {}: {:?}", source, target, path);
-                    if let Some((ps, pt)) = self.choose_route_segment(path) {
-                        let move_ = Move::Claim { punter: self.punter, source: ps, target: pt, };
+                    if let Some(move_) = self.choose_route_segment(path) {
+                        let (ps, pt) = match move_ {
+                            Move::Claim { source, target, .. } =>
+                                (source, target),
+                            Move::Option { source, target, .. } => {
+                                self.options_left -= 1;
+                                (source, target)
+                            },
+                            _ =>
+                                unreachable!(),
+                        };
                         self.goals.push((target, source));
                         self.mines_connected_sites.insert(ps);
                         self.mines_connected_sites.insert(pt);
@@ -249,34 +258,74 @@ impl GNGameState {
         }
     }
 
-    fn shortest_path<'a>(&self, source: SiteId, target: SiteId, gcache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
+    fn shortest_path<'a>(&self, source: SiteId, target: SiteId, gcache: &'a mut GraphCache<usize>) -> Option<&'a [SiteId]> {
         let my_punter = self.punter;
         let claimed_rivers = &self.claimed_rivers;
-        let probe_claimed = |(s, t)| claimed_rivers
-            .get(&River::new(s, t))
-            .map(|&river_owner| if river_owner & (1 << my_punter) != 0 {
-                EdgeAttr::Accessible { edge_cost: 0, }
+        let options_left = self.options_left;
+        self.rivers_graph.generic_bfs(source, options_left, |path, _cost, &options_left| {
+            if let Some(&pt) = path.last() {
+                if pt == target {
+                    // reached the target
+                    StepCommand::Terminate
+                } else if path.len() > 1 {
+                    // maybe we could use an option
+                    let len = path.len();
+                    if let Some(&ps) = path.get(len - 2) {
+                        if claimed_rivers
+                            .get(&River::new(ps, pt))
+                            .map(|river_owner| river_owner & (1 << my_punter) == 0)
+                            .unwrap_or(false)
+                        {
+                            if options_left > 0 {
+                                StepCommand::Continue(options_left - 1)
+                            } else {
+                                StepCommand::Stop
+                            }
+                        } else {
+                            StepCommand::Continue(options_left)
+                        }
+                    } else {
+                        StepCommand::Continue(options_left)
+                    }
+                } else {
+                    StepCommand::Continue(options_left)
+                }
             } else {
-                EdgeAttr::Blocked
-            })
-            .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, });
-
-        self.rivers_graph.shortest_path(source, target, gcache, probe_claimed)
+                StepCommand::Stop
+            }
+        }, |(s, t)| {
+            claimed_rivers
+                .get(&River::new(s, t))
+                .map(|&river_owner| if river_owner & (1 << my_punter) != 0 {
+                    EdgeAttr::Accessible { edge_cost: 0, }
+	        } else if river_owner.count_ones() > 1 {
+                    EdgeAttr::Blocked
+                } else if options_left > 0 {
+                    // it is an enemy river, but there is a chance to buy an option for it
+                    EdgeAttr::Accessible { edge_cost: 1, }
+                } else {
+                    // no options -- no chance
+                    EdgeAttr::Blocked
+                })
+                .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, })
+        }, gcache)
     }
 
-    fn choose_route_segment(&self, path: &[SiteId]) -> Option<(SiteId, SiteId)> {
+    fn choose_route_segment(&self, path: &[SiteId]) -> Option<Move> {
         let mut best = None;
         let mut offset = 0;
         while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
             let wanted_river = River::new(ps, pt);
-            if self.claimed_rivers.get(&wanted_river).map(|&p| p & (1 << self.punter) != 0).unwrap_or(false) {
+            let river_owner = self.claimed_rivers.get(&wanted_river).cloned();
+            if river_owner.map(|p| p & (1 << self.punter) != 0).unwrap_or(false) {
                 debug!("  -- from {} to {}: already claimed by me", ps, pt);
             } else {
                 let bw_coeff = self.rivers_bw
                     .get(&wanted_river)
                     .cloned()
                     .unwrap_or(0.0);
-                debug!("  -- from {} to {}: bw_coeff = {}", ps, pt, bw_coeff);
+                debug!("  -- from {} to {}{}: bw_coeff = {}",
+                       ps, pt, if river_owner.is_some() { " (NEED OPTION)" } else { "" }, bw_coeff);
                 best = match best {
                     Some((best_river, best_bw_coeff)) => if bw_coeff < best_bw_coeff {
                         Some((best_river, best_bw_coeff))
@@ -291,8 +340,18 @@ impl GNGameState {
         }
 
         if let Some((river, bw_coeff)) = best {
-            debug!("choosing {:?} because of maximum bw_coeff: {}", river, bw_coeff);
-            Some((river.source, river.target))
+            if self.claimed_rivers.contains_key(&river) {
+                debug!("choosing OPTION {:?} ({} left) because of maximum bw_coeff: {}", river, self.options_left, bw_coeff);
+                if self.options_left > 0 {
+                    Some(Move::Option { punter: self.punter, source: river.source, target: river.target, })
+                } else {
+                    error!("something wrong with my solver: choosing OPTION while no options left");
+                    None
+                }
+            } else {
+                debug!("choosing CLAIM {:?} because of maximum bw_coeff: {}", river, bw_coeff);
+                Some(Move::Claim { punter: self.punter, source: river.source, target: river.target, })
+            }
         } else {
             None
         }

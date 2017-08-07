@@ -84,7 +84,7 @@ impl Graph {
         probe_edge: E
     )
         -> Option<&'a [SiteId]>
-        where E: FnMut((SiteId, SiteId)) -> EdgeAttr,
+        where E: Fn((SiteId, SiteId)) -> EdgeAttr,
               S: Default + Clone,
     {
         self.generic_bfs(source, Default::default(), |path, _cost, _seed| {
@@ -122,12 +122,12 @@ impl Graph {
         source: SiteId,
         source_seed: S,
         mut step_fn: F,
-        mut probe_edge: E,
+        probe_edge: E,
         cache: &'a mut GraphCache<S>
     )
         -> Option<&'a [SiteId]>
         where F: FnMut(&[SiteId], usize, &S) -> StepCommand<S>,
-              E: FnMut((SiteId, SiteId)) -> EdgeAttr,
+              E: Fn((SiteId, SiteId)) -> EdgeAttr,
               S: Clone,
     {
         cache.clear();
