@@ -74,7 +74,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
     }
 }
 
-type ClaimedRivers = RiversIndex<PunterId>;
+type ClaimedRivers = RiversIndex<u64>;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkMinesGameState {
@@ -103,7 +103,7 @@ impl GameState for LinkMinesGameState {
                     let mut offset = 0;
                     while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
                         let wanted_river = River::new(ps, pt);
-                        if self.claimed_rivers.get(&wanted_river).map(|&p| p == self.punter).unwrap_or(false) {
+                        if self.claimed_rivers.get(&wanted_river).map(|&p| p & (1 << self.punter) != 0).unwrap_or(false) {
                             // it is already mine river, skip it
                             debug!(" ;; skipping already mine river from {} to {}", ps, pt);
                             offset += 1;
@@ -171,7 +171,7 @@ impl LinkMinesGameState {
         for move_ in moves {
             match move_ {
                 Move::Claim { punter, source, target, } => {
-                    self.claimed_rivers.insert(River::new(source, target), punter);
+                    self.claimed_rivers.insert(River::new(source, target), 1 << punter);
                 },
                 Move::Pass { .. } =>
                     (),
@@ -182,6 +182,9 @@ impl LinkMinesGameState {
                         offset += 1;
                     }
                 },
+                Move::Option { punter, source, target, } => {
+                    *self.claimed_rivers.entry(River::new(source, target)).or_insert(0) |= 1 << punter;
+                },
             }
         }
     }
@@ -191,7 +194,7 @@ impl LinkMinesGameState {
         let claimed_rivers = &self.claimed_rivers;
         let probe_claimed = |(s, t)| claimed_rivers
             .get(&River::new(s, t))
-            .map(|&river_owner| if river_owner == my_punter {
+            .map(|&river_owner| if river_owner & (1 << my_punter) != 0 {
                 EdgeAttr::Accessible { edge_cost: 0, }
             } else {
                 EdgeAttr::Blocked

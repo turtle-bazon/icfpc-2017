@@ -119,7 +119,7 @@ impl GameStateBuilder for GNGameStateBuilder {
     }
 }
 
-type ClaimedRivers = RiversIndex<PunterId>;
+type ClaimedRivers = RiversIndex<u64>;
 
 #[derive(Serialize, Deserialize)]
 pub struct GNGameState {
@@ -229,7 +229,7 @@ impl GNGameState {
         for move_ in moves {
             match move_ {
                 Move::Claim { punter, source, target, } => {
-                    self.claimed_rivers.insert(River::new(source, target), punter);
+                    self.claimed_rivers.insert(River::new(source, target), 1 << punter);
                 },
                 Move::Pass { .. } =>
                     (),
@@ -240,6 +240,9 @@ impl GNGameState {
                         offset += 1;
                     }
                 },
+                Move::Option { punter, source, target, } => {
+                    *self.claimed_rivers.entry(River::new(source, target)).or_insert(0) |= 1 << punter;
+                },
             }
         }
     }
@@ -249,7 +252,7 @@ impl GNGameState {
         let claimed_rivers = &self.claimed_rivers;
         let probe_claimed = |(s, t)| claimed_rivers
             .get(&River::new(s, t))
-            .map(|&river_owner| if river_owner == my_punter {
+            .map(|&river_owner| if river_owner & (1 << my_punter) != 0 {
                 EdgeAttr::Accessible { edge_cost: 0, }
             } else {
                 EdgeAttr::Blocked
@@ -264,7 +267,7 @@ impl GNGameState {
         let mut offset = 0;
         while let (Some(&ps), Some(&pt)) = (path.get(offset), path.get(offset + 1)) {
             let wanted_river = River::new(ps, pt);
-            if self.claimed_rivers.get(&wanted_river).map(|&p| p == self.punter).unwrap_or(false) {
+            if self.claimed_rivers.get(&wanted_river).map(|&p| p & (1 << self.punter) != 0).unwrap_or(false) {
                 debug!("  -- from {} to {}: already claimed by me", ps, pt);
             } else {
                 let bw_coeff = self.rivers_bw

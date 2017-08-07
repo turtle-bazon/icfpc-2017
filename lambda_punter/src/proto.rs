@@ -44,6 +44,7 @@ pub struct Setup {
 pub struct Settings {
     pub futures: bool,
     pub splurges: bool,
+    pub options: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -51,6 +52,7 @@ pub enum Move {
     Claim { punter: PunterId, source: SiteId, target: SiteId, },
     Pass { punter: PunterId, },
     Splurge { punter: PunterId, route: Vec<SiteId>, },
+    Option { punter: PunterId, source: SiteId, target: SiteId, },
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -73,6 +75,7 @@ enum ServerMove {
     claim { punter: PunterId, source: SiteId, target: SiteId, },
     pass { punter: PunterId, },
     splurge { punter: PunterId, route: Vec<SiteId>, },
+    option { punter: PunterId, source: SiteId, target: SiteId, },
 }
 #[derive(Debug, Deserialize)]
 struct ServerMoves {
@@ -120,6 +123,8 @@ impl Rep {
                                     Move::Pass { punter: punter, },
                                 ServerMove::splurge { punter, route, } =>
                                     Move::Splurge { punter: punter, route: route, },
+                                ServerMove::option { punter, source, target, } =>
+                                    Move::Option { punter: punter, source: source, target: target, },
                             }
                         }).collect(),
                     }, maybe_state))
@@ -135,6 +140,8 @@ impl Rep {
                                     Move::Pass { punter: punter },
                                 ServerMove::splurge { punter, route, } =>
                                     Move::Splurge { punter: punter, route: route, },
+                                ServerMove::option { punter, source, target, } =>
+                                    Move::Option { punter: punter, source: source, target: target, },
                             }
                         }).collect(),
                         scores: stop.scores,
@@ -156,6 +163,10 @@ impl Rep {
                                     _ => false,
                                 },
                                 splurges: match settings_obj.remove("splurges") {
+                                    Some(Value::Bool(true)) => true,
+                                    _ => false,
+                                },
+                                options: match settings_obj.remove("options") {
                                     Some(Value::Bool(true)) => true,
                                     _ => false,
                                 },
@@ -230,6 +241,14 @@ impl Req {
                         ].into_iter().collect::<BTreeMap<String, Value>>();
                         res.insert("splurge".to_string(), serde_json::to_value(m).map_err(Error::Json)?);
                     },
+                    Move::Option { punter, source, target, } => {
+                        let m = vec![
+                            ("punter".to_string(), serde_json::to_value(punter).map_err(Error::Json)?),
+                            ("source".to_string(), serde_json::to_value(source).map_err(Error::Json)?),
+                            ("target".to_string(), serde_json::to_value(target).map_err(Error::Json)?),
+                        ].into_iter().collect::<BTreeMap<String, Value>>();
+                        res.insert("option".to_string(), serde_json::to_value(m).map_err(Error::Json)?);
+                    },
                 }
                 if let Some(state) = maybe_state {
                     res.insert("state".to_string(), serde_json::to_value(state).map_err(Error::Json)?);
@@ -288,11 +307,23 @@ mod test {
     }
 
     #[test]
+    fn proto_move_4() {
+        let object = Rep::from_json::<()>("{\"move\":{\"moves\":[{\"option\":{\"punter\":0,\"source\":0,\"target\":1}},{\"option\":{\"punter\":1,\"source\":1,\"target\":2}}]}}").unwrap().0;
+        let result = Rep::Move {
+            moves: vec![
+                Move::Option { punter: 0, source: 0, target: 1, },
+                Move::Option { punter: 1, source: 1, target: 2, },
+                ]
+        };
+        assert_eq!(object,result);
+    }
+
+    #[test]
     fn proto_stop() {
-        let object = Rep::from_json::<()>("{\"stop\":{\"moves\":[{\"claim\":{\"punter\":0,\"source\":5,\"target\":7}},{\"claim\":{\"punter\":1,\"source\":7,\"target\":1}}], \"scores\":[{\"punter\":0,\"score\":-6},{\"punter\":1,\"score\":6}]}}").unwrap().0;
+        let object = Rep::from_json::<()>("{\"stop\":{\"moves\":[{\"option\":{\"punter\":0,\"source\":5,\"target\":7}},{\"claim\":{\"punter\":1,\"source\":7,\"target\":1}}], \"scores\":[{\"punter\":0,\"score\":-6},{\"punter\":1,\"score\":6}]}}").unwrap().0;
         let result = Rep::Stop {
             moves: vec![
-                Move::Claim { punter: 0, source: 5, target: 7, },
+                Move::Option { punter: 0, source: 5, target: 7, },
                 Move::Claim { punter: 1, source: 7, target: 1, },
                 ],
             scores: vec![
@@ -336,7 +367,7 @@ mod test {
     #[test]
     fn proto_setup_settings() {
         let object = Rep::from_json::<()>("{\"punter\":0, \"punters\":2,
-\"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]},\"settings\":{\"futures\":true,\"splurges\":true}}").unwrap().0;
+\"map\":{\"sites\":[{\"id\":4},{\"id\":1},{\"id\":3},{\"id\":6},{\"id\":5},{\"id\":0},{\"id\":7},{\"id\":2}], \"rivers\":[{\"source\":3,\"target\":4},{\"source\":0,\"target\":1},{\"source\":2,\"target\":3}, {\"source\":1,\"target\":3},{\"source\":5,\"target\":6},{\"source\":4,\"target\":5}, {\"source\":3,\"target\":5},{\"source\":6,\"target\":7},{\"source\":5,\"target\":7},{\"source\":1,\"target\":7},{\"source\":0,\"target\":7},{\"source\":1,\"target\":2}], \"mines\":[1,5]},\"settings\":{\"futures\":true,\"splurges\":true,\"options\":true}}").unwrap().0;
         let result = Rep::Setup(Setup {
             punter: 0,
             punters: 2,
@@ -361,6 +392,7 @@ mod test {
             settings: Settings {
                 futures: true,
                 splurges: true,
+                options: true,
             },
         });
         assert_eq!(object,result);
@@ -405,6 +437,13 @@ mod test {
     fn proto_out_move_2() {
         let object = Req::Move(Move::Pass { punter: 0 });
         let result = "{\"pass\":{\"punter\":0}}";
+        assert_eq!(object.to_json::<()>(None).unwrap(),result.to_string());
+    }
+
+    #[test]
+    fn proto_out_move_3() {
+        let object = Req::Move(Move::Option { punter: 2, source: 8, target: 1 });
+        let result = "{\"option\":{\"punter\":2,\"source\":8,\"target\":1}}";
         assert_eq!(object.to_json::<()>(None).unwrap(),result.to_string());
     }
 
