@@ -1,7 +1,7 @@
 use std::{time, thread};
 use std::cmp::{min, max};
 use std::sync::{mpsc, Arc};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use rand::{self, Rng};
 
 use super::super::types::{PunterId, SiteId};
@@ -138,7 +138,7 @@ impl GameStateBuilder for GNGameStateBuilder {
             goals: goals,
             claimed_rivers: Default::default(),
             futures: futures,
-            mines_connected_sites: HashSet::new(),
+            mines: setup.map.mines.to_owned(),
             rivers_bw: ArcSerDe(rivers_bw),
             options_left: if setup.settings.options { setup.map.mines.len() } else { 0 },
         }
@@ -155,7 +155,7 @@ pub struct GNGameState {
     goals: Vec<(SiteId, SiteId)>,
     claimed_rivers: ClaimedRivers,
     futures: Option<Vec<Future>>,
-    mines_connected_sites: HashSet<SiteId>,
+    mines: Vec<SiteId>,
     rivers_bw: ArcSerDe<RiversIndex<f64>>,
     options_left: usize,
 }
@@ -173,19 +173,10 @@ impl GameState for GNGameState {
                 if let Some(path) = maybe_path {
                     debug!("there is a path for goal from {} to {}: {:?}", source, target, path);
                     if let Some(move_) = self.choose_route_segment(path) {
-                        let (ps, pt) = match move_ {
-                            Move::Claim { source, target, .. } =>
-                                (source, target),
-                            Move::Option { source, target, .. } => {
-                                self.options_left -= 1;
-                                (source, target)
-                            },
-                            _ =>
-                                unreachable!(),
-                        };
+                        if let Move::Option { .. } = move_ {
+                            self.options_left -= 1;
+                        }
                         self.goals.push((target, source));
-                        self.mines_connected_sites.insert(ps);
-                        self.mines_connected_sites.insert(pt);
                         return Ok((move_, self));
                     }
                 }
@@ -193,48 +184,34 @@ impl GameState for GNGameState {
             }
             debug!("no more goals to reach, choosing a new random one");
 
-            // all current goals are reached for now, let's choose a random free river connected to our already existing path
-            let mut rng = rand::thread_rng();
-            let mut new_goal = None;
-            rng.shuffle(&mut self.rivers);
-            for river in self.rivers.iter() {
-                if !self.claimed_rivers.contains_key(river) {
-                    for &mine_site in self.mines_connected_sites.iter() {
-                        if self.shortest_path(river.source, mine_site, &mut gcache).is_some() {
-                            debug!("fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
-                            let move_ = Move::Claim { punter: self.punter, source: river.source, target: river.target, };
-                            new_goal = Some((move_, mine_site, river.source, river.target));
-                            break;
-                        }
+            // all current goals are reached for now, let's choose a fallback move
+            let new_goal_path = self.choose_fallback(&mut gcache);
+            if let Some((path, source, target)) = new_goal_path {
+                // new goal is choosen
+                if let Some(move_) = self.choose_route_segment(&path) {
+                    if let Move::Option { .. } = move_ {
+                        self.options_left -= 1;
                     }
-                }
-                if new_goal.is_some() {
-                    break;
+                    self.goals.push((source, target));
+                    return Ok((move_, self));
                 }
             }
 
-            return Ok(if let Some((move_, ms, rs, rt)) = new_goal {
-                // new goal is choosen
-                self.goals.push((ms, rs));
-                self.mines_connected_sites.insert(rs);
-                self.mines_connected_sites.insert(rt);
-                (move_, self)
-            } else {
-                // no new goals, claim some random river if any
-                let move_ = {
-                    let free_rivers: Vec<_> = self.rivers
-                        .iter()
-                        .filter(|r| !self.claimed_rivers.contains_key(r))
-                        .collect();
-                    if let Some(river) = rng.choose(&free_rivers) {
-                        Move::Claim { punter: self.punter, source: river.source, target: river.target, }
-                    } else {
-                        // no more rivers to claim
-                        Move::Pass { punter: self.punter, }
-                    }
-                };
-                (move_, self)
-            });
+            // no new goals, claim some random river if any
+            let move_ = {
+                let free_rivers: Vec<_> = self.rivers
+                    .iter()
+                    .filter(|r| !self.claimed_rivers.contains_key(r))
+                    .collect();
+                let mut rng = rand::thread_rng();
+                if let Some(river) = rng.choose(&free_rivers) {
+                    Move::Claim { punter: self.punter, source: river.source, target: river.target, }
+                } else {
+                    // no more rivers to claim
+                    Move::Pass { punter: self.punter, }
+                }
+            };
+            return Ok((move_, self))
         }
     }
 
@@ -380,6 +357,83 @@ impl GNGameState {
         } else {
             None
         }
+    }
+
+    fn choose_fallback(&mut self, gcache: &mut GraphCache<usize>) -> Option<(Vec<SiteId>, SiteId, SiteId)> {
+        let mut rng = rand::thread_rng();
+        rng.shuffle(&mut self.mines);
+        for &mine in self.mines.iter() {
+            debug!("fallback: trying to upgrade route from mine {}", mine);
+            let my_punter = self.punter;
+            let claimed_rivers = &self.claimed_rivers;
+            let options_left = self.options_left;
+            let mut best = None;
+            self.rivers_graph.generic_bfs(mine, options_left, |path, cost, &options_left| {
+                if let Some(&pt) = path.last() {
+                    let cmd = if path.len() > 1 {
+                        // maybe we could use an option
+                        let len = path.len();
+                        if let Some(&ps) = path.get(len - 2) {
+                            if claimed_rivers
+                                .get(&River::new(ps, pt))
+                                .map(|river_owner| river_owner & (1 << my_punter) == 0)
+                                .unwrap_or(false)
+                            {
+                                if options_left > 0 {
+                                    StepCommand::Continue(options_left - 1)
+                                } else {
+                                    StepCommand::Stop
+                                }
+                            } else {
+                                StepCommand::Continue(options_left)
+                            }
+                        } else {
+                            StepCommand::Continue(options_left)
+                        }
+                    } else {
+                        StepCommand::Continue(options_left)
+                    };
+
+                    if let StepCommand::Continue(..) = cmd {
+                        best = Some(if let Some((best_cost, best_path, best_target)) = best.take() {
+                            if best_cost < cost {
+                                (cost, path.to_owned(), pt)
+                            } else {
+                                (best_cost, best_path, best_target)
+                            }
+                        } else {
+                            (cost, path.to_owned(), pt)
+                        });
+                    }
+                    cmd
+                } else {
+                    StepCommand::Stop
+                }
+            }, |(s, t)| {
+                claimed_rivers
+                    .get(&River::new(s, t))
+                    .map(|&river_owner| if river_owner & (1 << my_punter) != 0 {
+                        EdgeAttr::Accessible { edge_cost: 0, }
+	            } else if river_owner.count_ones() > 1 {
+                        EdgeAttr::Blocked
+                    } else if options_left > 0 {
+                        // it is an enemy river, but there is a chance to buy an option for it
+                        EdgeAttr::Accessible { edge_cost: 1, }
+                    } else {
+                        // no options -- no chance
+                        EdgeAttr::Blocked
+                    })
+                    .unwrap_or(EdgeAttr::Accessible { edge_cost: 1, })
+            }, gcache);
+            if let Some((best_cost, best_path, best_target)) = best {
+                if best_path.len() > 1 {
+                    debug!("fallback: going path {:?} with best cost = {}", best_path, best_cost);
+                    return Some((best_path, mine, best_target));
+                }
+            }
+        }
+        debug!("fallback: none found");
+        None
     }
 }
 
