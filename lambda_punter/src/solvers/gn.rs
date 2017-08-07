@@ -32,6 +32,7 @@ impl GameStateBuilder for GNGameStateBuilder {
             // in case there is futures support, try to estimate the best ones
             let mut mcache = Default::default();
             let mut futures_estimated = Vec::with_capacity(setup.map.mines.len());
+            let mut start_turn = 0;
             for &mine in setup.map.mines.iter() {
                 if let Some(time_avail) = max_timeout.checked_sub(timeout_start.elapsed()) {
                     debug!("guessing a future for mine {}, {:?} time left", mine, time_avail);
@@ -41,8 +42,9 @@ impl GameStateBuilder for GNGameStateBuilder {
                             mine,
                             &setup.map.mines,
                             &rivers_bw,
-                            3,
-                            4,
+                            setup.punter,
+                            setup.punters,
+                            start_turn,
                             |path_rivers, claimed_rivers| {
                                 path_rivers
                                     .iter()
@@ -53,9 +55,10 @@ impl GameStateBuilder for GNGameStateBuilder {
                             time_avail,
                             &mut mcache,
                             &mut gcache);
-                    if let Some((source, target)) = future_guess {
-                        debug!("guessed a future from {} to {}", source, target);
+                    if let Some((source, target, path_len)) = future_guess {
+                        debug!("guessed a future from {} to {} (path len = {})", source, target, path_len);
                         futures_estimated.push(Future { source: source, target: target, });
+                        start_turn += path_len * setup.punters;
                     }
                 } else {
                     debug!("no more futures guessing, time is expired");
@@ -64,6 +67,7 @@ impl GameStateBuilder for GNGameStateBuilder {
             }
 
             if !futures_estimated.is_empty() {
+                futures_estimated.reverse();
                 futures = Some(futures_estimated);
             }
         }

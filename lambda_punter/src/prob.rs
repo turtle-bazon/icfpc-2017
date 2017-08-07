@@ -26,6 +26,7 @@ pub fn journey_success_simulate<F>(
     rivers_bw: &RiversIndex<f64>,
     my_punter: PunterId,
     punters_count: usize,
+    start_turn: usize,
     make_move: F,
     games_count: usize,
     cache: &mut MonteCarloCache,
@@ -59,6 +60,7 @@ pub fn journey_success_simulate<F>(
             rivers_bw: &RiversIndex<f64>,
             my_punter: PunterId,
             punters_count: usize,
+            start_turn: usize,
             make_move: F,
             bw_scale: f64,
             cache: &mut MonteCarloCache,
@@ -68,7 +70,7 @@ pub fn journey_success_simulate<F>(
         {
             cache.claimed_rivers.clear();
             let mut rng = rand::thread_rng();
-            let mut turn = 0;
+            let mut turn_counter = 0;
             loop {
                 // check if journey is finished or blocked
                 let mut finished = true;
@@ -88,7 +90,8 @@ pub fn journey_success_simulate<F>(
                     return Outcome::Success;
                 }
 
-                if turn == my_punter as usize {
+                let turn = turn_counter % punters_count;
+                if (turn_counter >= start_turn) && (turn == my_punter as usize) {
                     // it's a my turn, perform a move
                     if let Some(river) = make_move(&cache.route_rivers, &cache.claimed_rivers) {
                         cache.claimed_rivers.insert(river.clone(), my_punter);
@@ -116,11 +119,11 @@ pub fn journey_success_simulate<F>(
                     cache.claimed_rivers.insert(river, enemy_punter);
                 }
 
-                turn = (turn + 1) % punters_count;
+                turn_counter += 1;
             }
         }
 
-        match play(rivers_bw, my_punter, punters_count, &make_move, bw_scale, cache) {
+        match play(rivers_bw, my_punter, punters_count, start_turn, &make_move, bw_scale, cache) {
             Outcome::Success =>
                 success_count += 1,
             Outcome::Fail =>
@@ -137,13 +140,14 @@ pub fn estimate_best_future<F>(
     rivers_bw: &RiversIndex<f64>,
     my_punter: PunterId,
     punters_count: usize,
+    start_turn: usize,
     make_move: F,
     games_count: usize,
     time_limit: time::Duration,
     mcache: &mut MonteCarloCache,
     gcache: &mut GraphCache<f64>,
 )
-    -> Option<(SiteId, SiteId)>
+    -> Option<(SiteId, SiteId, usize)>
     where F: for<'a> Fn(&'a [River], &RiversIndex<PunterId>) -> Option<&'a River>
 {
     let mut best = None;
@@ -161,6 +165,7 @@ pub fn estimate_best_future<F>(
                     rivers_bw,
                     my_punter,
                     punters_count,
+                    start_turn,
                     &make_move,
                     games_count,
                     mcache);
@@ -175,12 +180,12 @@ pub fn estimate_best_future<F>(
                         // track the best future candidate
                         best = Some(if let Some((best_reward, best_fut)) = best.take() {
                             if best_reward < expected_reward {
-                                (expected_reward, (source, target))
+                                (expected_reward, (source, target, path.len()))
                             } else {
                                 (best_reward, best_fut)
                             }
                         } else {
-                            (expected_reward, (source, target))
+                            (expected_reward, (source, target, path.len()))
                         });
                         // check if there is no sense to move futher
                         if &expected_reward > prev_reward {
@@ -230,13 +235,13 @@ mod test {
         let (_, rivers_bw) = sample_map();
         let mut mcache = Default::default();
 
-        let prob = journey_success_simulate(&[1, 0], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
+        let prob = journey_success_simulate(&[1, 0], &rivers_bw, 0, 2, 0, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 2], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
+        let prob = journey_success_simulate(&[1, 2], &rivers_bw, 0, 2, 0, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 3], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
+        let prob = journey_success_simulate(&[1, 3], &rivers_bw, 0, 2, 0, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
-        let prob = journey_success_simulate(&[1, 7], &rivers_bw, 0, 2, make_move, 100, &mut mcache);
+        let prob = journey_success_simulate(&[1, 7], &rivers_bw, 0, 2, 0, make_move, 100, &mut mcache);
         assert_eq!(prob.map(|v| (v * 100.0) as usize), Some(100));
     }
 
@@ -255,7 +260,7 @@ mod test {
             .filter(|&site| site != 1)
             .flat_map(|target| graph.shortest_path_only::<()>(1, target, &mut gcache).map(|v| v.to_owned()))
             .map(|route| {
-                let prob = journey_success_simulate(&route, &rivers_bw, 1, 2, make_move, 10000, &mut mcache);
+                let prob = journey_success_simulate(&route, &rivers_bw, 1, 2, 0, make_move, 10000, &mut mcache);
                 (route, prob)
             })
             .collect();
@@ -286,7 +291,7 @@ mod test {
         let mut mcache = Default::default();
 
         let future =
-            estimate_best_future(&graph, 1, &[1, 5], &rivers_bw, 1, 2, make_move,
+            estimate_best_future(&graph, 1, &[1, 5], &rivers_bw, 1, 2, 0, make_move,
                                  10000, Duration::from_millis(5000), &mut mcache, &mut gcache).unwrap();
         assert!((future.1 == 4) || (future.1 == 6));
     }
@@ -298,7 +303,7 @@ mod test {
         let mut mcache = Default::default();
         let rivers_bw = RiversIndex::from_hash_map(graph.rivers_betweenness(&mut gcache));
 
-        estimate_best_future(&graph, 60, &[60, 10, 31, 33], &rivers_bw, 3, 4, make_move,
+        estimate_best_future(&graph, 60, &[60, 10, 31, 33], &rivers_bw, 3, 4, 0, make_move,
                              187, Duration::from_millis(5000), &mut mcache, &mut gcache).unwrap();
     }
 }
