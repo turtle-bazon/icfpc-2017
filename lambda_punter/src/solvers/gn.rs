@@ -193,25 +193,8 @@ impl GameState for GNGameState {
             }
             debug!("no more goals to reach, choosing a new random one");
 
-            // all current goals are reached for now, let's choose a random free river connected to our already existing path
-            let mut rng = rand::thread_rng();
-            let mut new_goal = None;
-            rng.shuffle(&mut self.rivers);
-            for river in self.rivers.iter() {
-                if !self.claimed_rivers.contains_key(river) {
-                    for &mine_site in self.mines_connected_sites.iter() {
-                        if self.shortest_path(river.source, mine_site, &mut gcache).is_some() {
-                            debug!("fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
-                            let move_ = Move::Claim { punter: self.punter, source: river.source, target: river.target, };
-                            new_goal = Some((move_, mine_site, river.source, river.target));
-                            break;
-                        }
-                    }
-                }
-                if new_goal.is_some() {
-                    break;
-                }
-            }
+            // all current goals are reached for now, let's choose a fallback move
+            let new_goal = self.choose_fallback(&mut gcache);
 
             return Ok(if let Some((move_, ms, rs, rt)) = new_goal {
                 // new goal is choosen
@@ -226,6 +209,7 @@ impl GameState for GNGameState {
                         .iter()
                         .filter(|r| !self.claimed_rivers.contains_key(r))
                         .collect();
+                    let mut rng = rand::thread_rng();
                     if let Some(river) = rng.choose(&free_rivers) {
                         Move::Claim { punter: self.punter, source: river.source, target: river.target, }
                     } else {
@@ -380,6 +364,23 @@ impl GNGameState {
         } else {
             None
         }
+    }
+
+    fn choose_fallback(&mut self, gcache: &mut GraphCache<usize>) -> Option<(Move, SiteId, SiteId, SiteId)> {
+        let mut rng = rand::thread_rng();
+        rng.shuffle(&mut self.rivers);
+        for river in self.rivers.iter() {
+            if !self.claimed_rivers.contains_key(river) {
+                for &mine_site in self.mines_connected_sites.iter() {
+                        if self.shortest_path(river.source, mine_site, gcache).is_some() {
+                            debug!("fallback: new goal is chosen: from {} (as a part of mine path) to {}", mine_site, river.target);
+                            let move_ = Move::Claim { punter: self.punter, source: river.source, target: river.target, };
+                            return Some((move_, mine_site, river.source, river.target));
+                        }
+                }
+            }
+        }
+        return None;
     }
 }
 
