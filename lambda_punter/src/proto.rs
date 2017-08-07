@@ -17,7 +17,7 @@ pub enum Req {
 #[derive(PartialEq, Debug)]
 pub enum Rep {
     Handshake { name: String, },
-    Timeout(usize),
+    Timeout(f64),
     Setup(Setup),
     Move { moves: Vec<Move>, },
     Stop {
@@ -176,7 +176,7 @@ impl Rep {
                         },
                     }), None))
                 } else if map.contains_key("timeout") {
-                    Ok((Rep::Timeout(serde_json::from_value::<usize>(map.remove("timeout").unwrap()).map_err(Error::Json)?), None))
+                    Ok((Rep::Timeout(serde_json::from_value::<f64>(map.remove("timeout").unwrap()).map_err(Error::Json)?), None))
                 } else if map.contains_key("you") {
                     Ok((Rep::Handshake {
                         name: serde_json::from_value::<String>(map.remove("you").unwrap()).map_err(Error::Json)?,
@@ -400,8 +400,8 @@ mod test {
 
     #[test]
     fn proto_timeout() {
-        let object = Rep::from_json::<()>("{\"timeout\": 10}").unwrap().0;
-        let result = Rep::Timeout(10);
+        let object = Rep::from_json::<()>("{\"timeout\": 10.0}").unwrap().0;
+        let result = Rep::Timeout(10.0);
         assert_eq!(object,result);
     }
 
