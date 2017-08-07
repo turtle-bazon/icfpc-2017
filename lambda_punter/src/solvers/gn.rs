@@ -1,5 +1,6 @@
-use std::time;
+use std::{time, thread};
 use std::cmp::{min, max};
+use std::sync::{mpsc, Arc};
 use std::collections::{HashMap, HashSet};
 use rand::{self, Rng};
 
@@ -17,33 +18,40 @@ impl GameStateBuilder for GNGameStateBuilder {
 
     fn build(self, setup: Setup) -> Self::GameState {
         let timeout_start = time::Instant::now();
-        let max_timeout = time::Duration::from_secs(9);
+        let max_timeout = time::Duration::from_secs(8);
 
         // make map graph
-        let rivers_graph = Graph::from_map(&setup.map);
+        let rivers_graph = Arc::new(Graph::from_map(&setup.map));
         let mut gcache = Default::default();
 
         // calculate betweenness coeffs
-        let rivers_bw = RiversIndex::from_hash_map(
-            rivers_graph.rivers_betweenness(&mut gcache));
+        let rivers_bw = Arc::new(RiversIndex::from_hash_map(
+            rivers_graph.rivers_betweenness::<()>(&mut gcache)));
 
         let mut futures = None;
         if setup.settings.futures {
             // in case there is futures support, try to estimate the best ones
-            let mut mcache = Default::default();
+            let mines = Arc::new(setup.map.mines.to_owned());
             let mut futures_estimated = Vec::with_capacity(setup.map.mines.len());
             let mut start_turn = 0;
             for &mine in setup.map.mines.iter() {
                 if let Some(time_avail) = max_timeout.checked_sub(timeout_start.elapsed()) {
                     debug!("guessing a future for mine {}, {:?} time left", mine, time_avail);
-                    let future_guess =
-                        prob::estimate_best_future(
+                    let (tx, rx) = mpsc::channel();
+                    let rivers_graph = rivers_graph.clone();
+                    let rivers_bw = rivers_bw.clone();
+                    let mines = mines.clone();
+                    let punter = setup.punter;
+                    let punters = setup.punters;
+                    let rivers_count = setup.map.rivers.len();
+                    thread::spawn(move || {
+                        tx.send(prob::estimate_best_future(
                             &rivers_graph,
                             mine,
-                            &setup.map.mines,
+                            &mines,
                             &rivers_bw,
-                            setup.punter,
-                            setup.punters,
+                            punter,
+                            punters,
                             start_turn,
                             |path_rivers, claimed_rivers| {
                                 path_rivers
@@ -51,14 +59,27 @@ impl GameStateBuilder for GNGameStateBuilder {
                                     .filter(|&r| !claimed_rivers.contains_key(r))
                                     .max_by_key(|&r| rivers_bw.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
                             },
-                            max(setup.map.rivers.len(), 128),
+                            min(max(rivers_count, 128), 1024),
                             time_avail,
-                            &mut mcache,
-                            &mut gcache);
-                    if let Some((source, target, path_len)) = future_guess {
-                        debug!("guessed a future from {} to {} (path len = {})", source, target, path_len);
-                        futures_estimated.push(Future { source: source, target: target, });
-                        start_turn += path_len * setup.punters;
+                            &mut Default::default(),
+                            &mut Default::default())).ok();
+                    });
+                    match rx.recv_timeout(time_avail) {
+                        Ok(Some((source, target, path_len))) => {
+                            debug!("guessed a future from {} to {} (path len = {})", source, target, path_len);
+                            futures_estimated.push(Future { source: source, target: target, });
+                            start_turn += path_len * setup.punters;
+                        },
+                        Ok(None) => {
+                            debug!("cannot estimate any future for mine {}, proceeding with next", mine);
+                        },
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            debug!("no more futures guessing, bg thread is timed out");
+                            break;
+                        },
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            error!("bg thread suddenly disconnected");
+                        },
                     }
                 } else {
                     debug!("no more futures guessing, time is expired");
@@ -113,12 +134,12 @@ impl GameStateBuilder for GNGameStateBuilder {
         GNGameState {
             punter: setup.punter,
             rivers: setup.map.rivers,
-            rivers_graph: rivers_graph,
+            rivers_graph: ArcSerDe(rivers_graph),
             goals: goals,
             claimed_rivers: Default::default(),
             futures: futures,
             mines_connected_sites: HashSet::new(),
-            rivers_bw: rivers_bw,
+            rivers_bw: ArcSerDe(rivers_bw),
             options_left: if setup.settings.options { setup.map.mines.len() } else { 0 },
         }
     }
@@ -130,12 +151,12 @@ type ClaimedRivers = RiversIndex<u64>;
 pub struct GNGameState {
     punter: PunterId,
     rivers: Vec<River>,
-    rivers_graph: Graph,
+    rivers_graph: ArcSerDe<Graph>,
     goals: Vec<(SiteId, SiteId)>,
     claimed_rivers: ClaimedRivers,
     futures: Option<Vec<Future>>,
     mines_connected_sites: HashSet<SiteId>,
-    rivers_bw: RiversIndex<f64>,
+    rivers_bw: ArcSerDe<RiversIndex<f64>>,
     options_left: usize,
 }
 
@@ -359,5 +380,32 @@ impl GNGameState {
         } else {
             None
         }
+    }
+}
+
+struct ArcSerDe<T>(Arc<T>);
+
+use std::ops::Deref;
+
+impl<T> Deref for ArcSerDe<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+use serde::{ser, de};
+
+impl<T> ser::Serialize for ArcSerDe<T> where T: ser::Serialize {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ser::Serializer {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, T> de::Deserialize<'de> for ArcSerDe<T> where T: de::Deserialize<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: de::Deserializer<'de> {
+        let item: T = de::Deserialize::deserialize(deserializer)?;
+        Ok(ArcSerDe(Arc::new(item)))
     }
 }

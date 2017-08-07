@@ -121,10 +121,10 @@ function parseGameLog($log) {
 
   $handle = fopen($log, "r");
   while (($line = fgets($handle)) !== false) {
-    if (($myPunterID == -1) && (($pos = strpos($line, '{"ready":')) !== false)) {
+    if (($myPunterID == -1) && (($pos = strpos($line, '{"punter":')) !== false)) {
       $str = substr($line, $pos);
       $data = json_decode($str, true);
-      $myPunterID = $data['ready'];
+      $myPunterID = $data['punter'];
       continue;
     }
 
@@ -153,6 +153,9 @@ function reportUpdateGame(&$report, $game, $looseLog) {
   else {
     /* Parse score here... */
     list($myPunterID, $score) = parseGameLog($game['output']);
+    if ($myPunterID < 0) {
+      throw new Exception('Unable to detect own punter ID');
+    }
 
     $game['playerIndex'] = $myPunterID;
     $game['players'] = count($score);
