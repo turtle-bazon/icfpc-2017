@@ -34,6 +34,11 @@ function parseArgs() {
     ->defaultValue('./benchmark/loose');
 
   $specs
+    ->add('s|logSplurge?', 'Location for splurge games logs.')
+    ->isa('String')
+    ->defaultValue('./benchmark/splurge');
+
+  $specs
     ->add('e|eager', 'Do not avoid player named "eager punter"');
 
   $specs
@@ -117,7 +122,7 @@ function reportCheckIsEagerGame($game) {
 }
 
 function parseGameLog($log) {
-  $myPunterID = -1; $score = null;
+  $myPunterID = -1; $score = null; $extensions = [];
 
   $handle = fopen($log, "r");
   while (($line = fgets($handle)) !== false) {
@@ -134,12 +139,17 @@ function parseGameLog($log) {
       $score = $data['stop']['scores'];
       continue;
     }
+
+    if (!in_array('option', $extensions) && (($pos = strpos($line, '{"option":')) !== false)) {
+      $extensions[] = 'option';
+      continue;
+    }
   }
   fclose($handle);
-  return [$myPunterID, $score];
+  return [$myPunterID, $score, $extensions];
 }
 
-function reportUpdateGame(&$report, $game, $looseLog) {
+function reportUpdateGame(&$report, $game, $looseLog, $splurgeLog) {
   echo "[" . $game['pid'] . "] Game finished: " . $game['status']
            . (reportCheckIsEagerGame($game) ? " [ EAGER PUNTER ]" : "");
 
@@ -152,7 +162,7 @@ function reportUpdateGame(&$report, $game, $looseLog) {
   }
   else {
     /* Parse score here... */
-    list($myPunterID, $score) = parseGameLog($game['output']);
+    list($myPunterID, $score, $extensions) = parseGameLog($game['output']);
     if ($myPunterID < 0) {
       throw new Exception('Unable to detect own punter ID');
     }
@@ -180,7 +190,7 @@ function reportUpdateGame(&$report, $game, $looseLog) {
 
     $game['result'] = ($metaScore == $game['players']) ? 'win' : 'loose';
 
-    echo ": Score: " . $game['score'] . ", meta-score: " . $game['metaScore'] . " -> " . $game['result'] . "\n";
+    echo ": Score: " . $game['score'] . ", meta-score: " . $game['metaScore'] . " -> " . $game['result'];
     $report['maps'][$map]['games'][] = $game;
 
     if ($game['result'] == 'loose') {
@@ -190,6 +200,17 @@ function reportUpdateGame(&$report, $game, $looseLog) {
                         . '.log';
       copy($game['output'], $looseLog . '/' . $looseLogFilename);
     }
+
+    if (in_array('splurge', $extensions)) {
+      echo " [SPLURGE] ";
+      @mkdir($splurgeLog, 0777, true);
+      $splurgeLogFilename = "splurge-log-{$map}-" . $game['pid'] . '-'
+                          . ((new DateTime())->format('Y-m-d_h_m_i'))
+                          . '.log';
+      copy($game['output'], $splurgeLog . '/' . $splurgeLogFilename);
+    }
+
+    echo "\n";
   }
 
   unlink($game['output']);
@@ -336,7 +357,7 @@ while ($keepGoing && !reportReady($report)) {
 
       $game = $games[$chPID];
       $game['status'] = ($status == 0) ? 'ok' : 'error';
-      reportUpdateGame($report, $game, $result->logLoose);
+      reportUpdateGame($report, $game, $result->logLoose, $result->logSplurge);
       unset($games[$chPID]);
     }
 
