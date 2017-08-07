@@ -61,6 +61,15 @@
             (site-x site-target)
             (site-y site-target))))
 
+(define (future->gnuplot future map-sites)
+  (let ((site-source (site-by-id map-sites (future-source future)))
+        (site-target (site-by-id map-sites (future-target future))))
+    (format #f "set arrow from ~a,~a to ~a,~a nohead linecolor rgb 'magenta' linewidth 10"
+            (site-x site-source)
+            (site-y site-source)
+            (site-x site-target)
+            (site-y site-target))))
+
 (define (owned-river->gnuplot river color map-sites)
   (let ((site-source (site-by-id map-sites (river-source river)))
         (site-target (site-by-id map-sites (river-target river))))
@@ -99,7 +108,6 @@
                                       (let* ((river-def (car claim))
                                              (pid (cdr claim))
                                              (river (apply make-river river-def)))
-                                        (flog-msg 'DEBUG "fff")
                                         (if (eq? my-id pid)
                                             (owned-river->gnuplot river "dark-green" map-sites)
                                             (owned-river->gnuplot river "dark-red" map-sites))))))))
@@ -115,8 +123,14 @@
                                                   (if (eq? my-id pid)
                                                       (owned-river->gnuplot river "green" map-sites)
                                                       (owned-river->gnuplot river "red" map-sites)))
-                                                ""))))))))
-    (list claims-strs
+                                                "")))))))
+         (futures-strs (-> (game-state-futures game-state)
+                           (hash-ref my-id)
+                           (or '())
+                           (->> (map (lambda (future)
+                                       (future->gnuplot future map-sites)))))))
+    (list futures-strs
+          claims-strs
           last-moves-strs)))
 
 (define (to->gnuplot rctx)
@@ -137,8 +151,10 @@
            (punters-count (game-punters-count game))
            (game-map-strs (game-map->gnuplot (game-game-map game)))
            (game-state-strs (game-state->gnuplot my-id punters-count (game-game-map game) game-state)))
-      (-> (append game-map-strs
-                  game-state-strs)
+      ; futures first !!!
+      (-> (append (list (car game-state-strs))
+                  game-map-strs
+                  (cdr game-state-strs))
           (gp-data-as-str)))))
 
 (define (gp-exec rctx plot-prog frame-number)
@@ -218,7 +234,14 @@
   #nil)
 
 (define (handle-ready rctx jsval)
-  #nil)
+  (with-fluids ((*game* (rc-game rctx))
+                (*game-state* (rc-game-state rctx)))
+    (let ((punter (hash-ref jsval "ready")))
+      (declare-futures punter (map
+                               (lambda (future-js)
+                                 (make-future (hash-ref future-js "source")
+                                              (hash-ref future-js "target")))
+                               (hash-ref jsval "futures"))))))
 
 (define (handle-my-moves rctx jsval)
   (let* ((current-fc (rc-fcounter rctx))

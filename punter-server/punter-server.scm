@@ -1,5 +1,6 @@
 (add-to-load-path ".")
-(use-modules (ice-9 format)
+(use-modules (ext-lib pipe)
+             (ice-9 format)
              (ice-9 match)
              (lib game)
              (lib game-data)
