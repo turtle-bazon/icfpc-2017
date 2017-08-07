@@ -9,15 +9,20 @@ pub struct Graph {
     neighs: HashMap<SiteId, HashSet<SiteId>>,
 }
 
+enum Visit {
+    Visited,
+    NotYetVisited(usize),
+}
+
 #[derive(Default)]
-pub struct GraphCache {
-    pqueue: BinaryHeap<PQNode>,
-    visited: HashSet<SiteId>,
+pub struct GraphCache<S = ()> {
+    pqueue: BinaryHeap<PQNode<S>>,
+    visited: HashMap<SiteId, Visit>,
     path_buf: Vec<(SiteId, usize)>,
     path: Vec<SiteId>,
 }
 
-impl GraphCache {
+impl<S> GraphCache<S> {
     fn clear(&mut self) {
         self.pqueue.clear();
         self.visited.clear();
@@ -29,6 +34,18 @@ impl GraphCache {
 pub enum EdgeAttr {
     Blocked,
     Accessible { edge_cost: usize, },
+}
+
+impl EdgeAttr {
+    pub fn standard(_: (SiteId, SiteId)) -> EdgeAttr {
+        EdgeAttr::Accessible { edge_cost: 1, }
+    }
+}
+
+pub enum StepCommand<S> {
+    Continue(S),
+    Stop,
+    Terminate,
 }
 
 impl Graph {
@@ -53,41 +70,122 @@ impl Graph {
         }
     }
 
-    pub fn shortest_path_only<'a>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
-        self.shortest_path(source, target, cache, |_| EdgeAttr::Accessible { edge_cost: 1, })
+    pub fn shortest_path_only<'a, S>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache<S>) -> Option<&'a [SiteId]>
+        where S: Default + Clone
+    {
+        self.shortest_path(source, target, cache, EdgeAttr::standard)
     }
 
-    pub fn shortest_path<'a, E>(&self, source: SiteId, target: SiteId, cache: &'a mut GraphCache, mut probe_edge: E) -> Option<&'a [SiteId]>
-        where E: FnMut((SiteId, SiteId)) -> EdgeAttr
+    pub fn shortest_path<'a, E, S>(
+        &self,
+        source: SiteId,
+        target: SiteId,
+        cache: &'a mut GraphCache<S>,
+        probe_edge: E
+    )
+        -> Option<&'a [SiteId]>
+        where E: FnMut((SiteId, SiteId)) -> EdgeAttr,
+              S: Default + Clone,
+    {
+        self.generic_bfs(source, Default::default(), |path, _cost, _seed| {
+            if let Some(&pt) = path.last() {
+                if pt == target {
+                    StepCommand::Terminate
+                } else {
+                    StepCommand::Continue(Default::default())
+                }
+            } else {
+                StepCommand::Stop
+            }
+        }, probe_edge, cache)
+    }
+
+    pub fn longest_jouney_from<S>(&self, source: SiteId, cache: &mut GraphCache<S>) -> Option<Vec<SiteId>> where S: Default + Clone {
+        let mut best = None;
+        self.generic_bfs(source, Default::default(), |path, cost, _seed| {
+            best = Some(if let Some((best_cost, best_path)) = best.take() {
+                if best_cost < cost {
+                    (cost, path.to_owned())
+                } else {
+                    (best_cost, best_path)
+                }
+            } else {
+                (cost, path.to_owned())
+            });
+            StepCommand::Continue(Default::default())
+        }, EdgeAttr::standard, cache);
+        best.map(|v| v.1)
+    }
+
+    pub fn generic_bfs<'a, S, F, E>(
+        &self,
+        source: SiteId,
+        source_seed: S,
+        mut step_fn: F,
+        mut probe_edge: E,
+        cache: &'a mut GraphCache<S>
+    )
+        -> Option<&'a [SiteId]>
+        where F: FnMut(&[SiteId], usize, &S) -> StepCommand<S>,
+              E: FnMut((SiteId, SiteId)) -> EdgeAttr,
+              S: Clone,
     {
         cache.clear();
         cache.path_buf.push((source, 0));
-        cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, });
-        while let Some(PQNode { site, cost: current_cost, mut phead, }) = cache.pqueue.pop() {
-            if site == target {
-                while phead != 0 {
-                    let (site_hop, next_phead) = cache.path_buf[phead - 1];
-                    cache.path.push(site_hop);
-                    phead = next_phead;
-                }
-                cache.path.reverse();
-                return Some(&cache.path);
+        cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, seed: source_seed, });
+        while let Some(PQNode { site, cost: current_cost, phead: current_phead, seed, }) = cache.pqueue.pop() {
+            // check if node is visited
+            match cache.visited.get(&site) {
+                Some(&Visit::NotYetVisited(prev_cost)) if current_cost > prev_cost =>
+                    continue,
+                _ =>
+                    (),
             }
-            cache.visited.insert(site);
+            cache.visited.insert(site, Visit::Visited);
+
+            // restore full path
+            cache.path.clear();
+            let mut phead = current_phead;
+            while phead != 0 {
+                let (site_hop, next_phead) = cache.path_buf[phead - 1];
+                cache.path.push(site_hop);
+                phead = next_phead;
+            }
+            cache.path.reverse();
+
+            // check if we should stop here
+            let next_seed = match step_fn(&cache.path, current_cost, &seed) {
+                StepCommand::Terminate =>
+                    return Some(&cache.path),
+                StepCommand::Stop =>
+                    continue,
+                StepCommand::Continue(next_seed) =>
+                    next_seed,
+            };
+
+            // proceed with neighbours
             if let Some(neighs) = self.neighs.get(&site) {
+                let next_cost = current_cost + 1;
                 for &reachable_site in neighs.iter() {
-                    if cache.visited.contains(&reachable_site) {
-                        continue;
+                    match cache.visited.get(&reachable_site) {
+                        None =>
+                            (),
+                        Some(&Visit::NotYetVisited(prev_cost)) if next_cost < prev_cost =>
+                            (),
+                        _ =>
+                            continue,
                     }
                     match probe_edge((site, reachable_site)) {
                         EdgeAttr::Blocked =>
                             continue,
                         EdgeAttr::Accessible { edge_cost, } => {
-                            cache.path_buf.push((reachable_site, phead));
+                            cache.visited.insert(reachable_site, Visit::NotYetVisited(next_cost));
+                            cache.path_buf.push((reachable_site, current_phead));
                             cache.pqueue.push(PQNode {
                                 site: reachable_site,
                                 cost: current_cost + edge_cost,
                                 phead: cache.path_buf.len(),
+                                seed: next_seed.clone(),
                             });
                         },
                     }
@@ -95,47 +193,6 @@ impl Graph {
             }
         }
         None
-    }
-
-    pub fn longest_jouney_from<'a>(&self, source: SiteId, cache: &'a mut GraphCache) -> Option<&'a [SiteId]> {
-        cache.clear();
-        cache.path_buf.push((source, 0));
-        cache.pqueue.push(PQNode { site: source, cost: 0, phead: 1, });
-        let mut best = None;
-        while let Some(PQNode { site, cost: current_cost, phead, }) = cache.pqueue.pop() {
-            best = match best {
-                Some((best_phead, best_cost)) if current_cost < best_cost =>
-                    Some((best_phead, best_cost)),
-                _ =>
-                    Some((phead, current_cost)),
-            };
-            cache.visited.insert(site);
-            if let Some(neighs) = self.neighs.get(&site) {
-                for &reachable_site in neighs.iter() {
-                    if cache.visited.contains(&reachable_site) {
-                        continue;
-                    }
-                    cache.path_buf.push((reachable_site, phead));
-                    cache.pqueue.push(PQNode {
-                        site: reachable_site,
-                        cost: current_cost + 1,
-                        phead: cache.path_buf.len(),
-                    });
-                }
-            }
-        }
-
-        if let Some((mut phead, _)) = best {
-            while phead != 0 {
-                let (site_hop, next_phead) = cache.path_buf[phead - 1];
-                cache.path.push(site_hop);
-                phead = next_phead;
-            }
-            cache.path.reverse();
-            Some(&cache.path)
-        } else {
-            None
-        }
     }
 
     // The Girvan-Newman Algorithm
@@ -152,18 +209,19 @@ impl Graph {
         rivers
     }
 
-    fn rivers_betweenness_pass(
+    fn rivers_betweenness_pass<S>(
         &self,
         start_node: SiteId,
         rivers: &mut HashMap<River, f64>,
         visit_cache: &mut HashMap<SiteId, BssVisit>,
         visit_rev: &mut BinaryHeap<(usize, SiteId)>,
-        cache: &mut GraphCache)
+        cache: &mut GraphCache<S>)
+        where S: Default
     {
         visit_cache.clear();
         visit_rev.clear();
         cache.clear();
-        cache.pqueue.push(PQNode { site: start_node, cost: 0, phead: 0, });
+        cache.pqueue.push(PQNode { site: start_node, cost: 0, phead: 0, ..Default::default() });
         // forward pass
         while let Some(PQNode { site, cost: parent_cost, .. }) = cache.pqueue.pop() {
             let parent_count = {
@@ -200,6 +258,7 @@ impl Graph {
                             site: reachable_site,
                             cost: children_cost,
                             phead: 0,
+                            ..Default::default()
                         })
                     }
                 }
@@ -244,23 +303,32 @@ impl Graph {
     }
 }
 
-#[derive(PartialEq, Eq)]
-struct PQNode {
+#[derive(Default)]
+struct PQNode<S = ()> {
     site: SiteId,
     cost: usize,
     phead: usize,
+    seed: S,
 }
 
-impl Ord for PQNode {
-    fn cmp(&self, other: &PQNode) -> Ordering {
+impl<S> PartialEq for PQNode<S> {
+    fn eq(&self, other: &PQNode<S>) -> bool {
+        self.site == other.site && self.cost == other.cost && self.phead == other.phead
+    }
+}
+
+impl<S> Eq for PQNode<S> {}
+
+impl<S> Ord for PQNode<S> {
+    fn cmp(&self, other: &PQNode<S>) -> Ordering {
         other.cost.cmp(&self.cost)
             .then_with(|| self.site.cmp(&other.site))
             .then_with(|| self.phead.cmp(&other.phead))
     }
 }
 
-impl PartialOrd for PQNode {
-    fn partial_cmp(&self, other: &PQNode) -> Option<Ordering> {
+impl<S> PartialOrd for PQNode<S> {
+    fn partial_cmp(&self, other: &PQNode<S>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -289,9 +357,9 @@ mod test {
     fn shortest_path() {
         let mut cache = Default::default();
         let graph = sample_map();
-        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only(1, 4, &mut cache), Some(path14));
-        let path15: &[_] = &[1, 3, 5]; assert_eq!(graph.shortest_path_only(1, 5, &mut cache), Some(path15));
-        let path04: &[_] = &[0, 1, 3, 4]; assert_eq!(graph.shortest_path_only(0, 4, &mut cache), Some(path04));
+        let path14: &[_] = &[1, 3, 4]; assert_eq!(graph.shortest_path_only::<()>(1, 4, &mut cache), Some(path14));
+        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path_only::<()>(1, 5, &mut cache), Some(path15));
+        let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path_only::<()>(0, 4, &mut cache), Some(path04));
     }
 
     #[test]
@@ -311,9 +379,9 @@ mod test {
             }
         }
 
-        let path14: &[_] = &[1, 2, 3, 4]; assert_eq!(graph.shortest_path(1, 4, &mut cache, edge_probe), Some(path14));
-        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path(1, 5, &mut cache, edge_probe), Some(path15));
-        let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path(0, 4, &mut cache, edge_probe), Some(path04));
+        let path14: &[_] = &[1, 7, 5, 4]; assert_eq!(graph.shortest_path::<_, ()>(1, 4, &mut cache, edge_probe), Some(path14));
+        let path15: &[_] = &[1, 7, 5]; assert_eq!(graph.shortest_path::<_, ()>(1, 5, &mut cache, edge_probe), Some(path15));
+        let path04: &[_] = &[0, 7, 5, 4]; assert_eq!(graph.shortest_path::<_, ()>(0, 4, &mut cache, edge_probe), Some(path04));
     }
 
     #[test]
@@ -344,7 +412,7 @@ mod test {
     fn longest_jouney() {
         let mut cache = Default::default();
         let graph = sample_map();
-        assert_eq!(graph.longest_jouney_from(6, &mut cache).and_then(|p| p.last()), Some(&2));
+        assert_eq!(graph.longest_jouney_from::<()>(6, &mut cache).and_then(|p| p.last().cloned()), Some(2));
     }
 
     #[test]

@@ -20,7 +20,7 @@ impl GameStateBuilder for LinkMinesGameStateBuilder {
             if let Some(&mine) = setup.map.mines.iter().next() {
                 for &site in setup.map.sites.iter() {
                     let key = (min(mine, site), max(mine, site));
-                    if let Some(path) = rivers_graph.shortest_path_only(key.0, key.1, &mut gcache) {
+                    if let Some(path) = rivers_graph.shortest_path_only::<()>(key.0, key.1, &mut gcache) {
                         mine_pairs.insert(key, path.to_owned());
                         break;
                     }
