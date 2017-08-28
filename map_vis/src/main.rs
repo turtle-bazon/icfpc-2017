@@ -125,7 +125,7 @@ fn run() -> Result<(), Error> {
     let mut gui_state = GuiState::Standard;
     while let Some(event) = window.next() {
         window.draw_2d(&event, |context, g2d| {
-            use piston_window::{clear, text, Transformed, line, ellipse};
+            use piston_window::{clear, text, Transformed, line, Line, ellipse};
             clear([0.0, 0.0, 0.0, 1.0], g2d);
             text::Text::new_color([0.0, 1.0, 0.0, 1.0], 16).draw(
                 &gui_state.console(&world),
@@ -135,14 +135,25 @@ fn run() -> Result<(), Error> {
                 g2d
             );
 
-            gui_state.draw(&world, &context.viewport, |element| match element {
-                DrawElement::River { color, radius, source_x, source_y, target_x, target_y } => {
-                    line(color, radius, [source_x, source_y, target_x, target_y], context.transform, g2d);
-                },
-                DrawElement::Mine { x, y } => {
-                    ellipse([1.0, 0.0, 0.0, 1.0], [x - 8.0, y - 8.0, 16.0, 16.0], context.transform, g2d);
-                },
-            });
+            if let Some(tr) = world.translator(&context.viewport) {
+                gui_state.draw(&world, |element| match element {
+                    DrawElement::River { color, radius, source_x, source_y, target_x, target_y } => {
+                        line(color, radius, [tr.x(source_x), tr.y(source_y), tr.x(target_x), tr.y(target_y)], context.transform, g2d);
+                    },
+                    DrawElement::Mine { x, y } => {
+                        ellipse([1.0, 0.0, 0.0, 1.0], [tr.x(x) - 8.0, tr.y(y) - 8.0, 16.0, 16.0], context.transform, g2d);
+                    },
+                    DrawElement::Future { color, source_x, source_y, target_x, target_y, } => {
+                        line(color, 2.0, [tr.x(source_x) - 4.0, tr.y(source_y), tr.x(source_x) + 4.0, tr.y(source_y)], context.transform, g2d);
+                        line(color, 2.0, [tr.x(source_x), tr.y(source_y) - 4.0, tr.x(source_x), tr.y(source_y) + 4.0], context.transform, g2d);
+                        line(color, 2.0, [tr.x(target_x) - 4.0, tr.y(target_y), tr.x(target_x) + 4.0, tr.y(target_y)], context.transform, g2d);
+                        line(color, 2.0, [tr.x(target_x), tr.y(target_y) - 4.0, tr.x(target_x), tr.y(target_y) + 4.0], context.transform, g2d);
+                        Line::new(color, 0.5).draw_arrow(
+                            [tr.x(source_x), tr.y(source_y), tr.x(target_x), tr.y(target_y)],
+                            8.0, &Default::default(), context.transform, g2d);
+                    },
+                });
+            }
         });
 
         if let Some(Button::Keyboard(key)) = event.press_args() {
@@ -215,7 +226,17 @@ enum DrawElement {
         target_x: f64,
         target_y: f64,
     },
-    Mine { x: f64, y: f64, },
+    Mine {
+        x: f64,
+        y: f64,
+    },
+    Future {
+        color: [f32; 4],
+        source_x: f64,
+        source_y: f64,
+        target_x: f64,
+        target_y: f64,
+    },
 }
 
 impl<'a> World<'a> {
@@ -257,40 +278,63 @@ impl<'a> World<'a> {
         })
     }
 
-    fn draw<DF>(&self, viewport: &Option<Viewport>, draw_element: DF) where DF: FnMut(DrawElement) {
-        self.draw_custom(viewport, draw_element, |_, _| ([0.0, 0.0, 1.0, 1.0], 1.0))
+    fn draw<DF>(&self, draw_element: DF) where DF: FnMut(DrawElement) {
+        self.draw_custom(draw_element, |_, _| ([0.0, 0.0, 1.0, 1.0], 1.0))
     }
 
-    fn draw_custom<DF, RF>(&self, viewport: &Option<Viewport>, mut draw_element: DF, river_setup: RF)
+    fn draw_custom<DF, RF>(&self, mut draw_element: DF, river_setup: RF)
         where DF: FnMut(DrawElement),
               RF: Fn(SiteId, SiteId) -> ([f32; 4], f64),
     {
-        let (w, h) = viewport
-            .map(|v| (v.draw_size[0], v.draw_size[1]))
-            .unwrap_or((SCREEN_WIDTH, SCREEN_HEIGHT));
-
-        if (w <= 2 * BORDER_WIDTH) || (h <= BORDER_WIDTH + CONSOLE_HEIGHT) {
-            return;
-        }
-
-        let tr_x = |x| (x - self.bounds.0) * (w - BORDER_WIDTH - BORDER_WIDTH) as f64 / (self.bounds.2 - self.bounds.0) + BORDER_WIDTH as f64;
-        let tr_y = |y| (y - self.bounds.1) * (h - BORDER_WIDTH - CONSOLE_HEIGHT) as f64 / (self.bounds.3 - self.bounds.1) + CONSOLE_HEIGHT as f64;
-
         for &RiverRef { source, target } in self.rivers_refs.iter() {
             let (color, radius) = river_setup(source.id, target.id);
             draw_element(DrawElement::River {
                 color: color,
                 radius: radius,
-                source_x: tr_x(source.x),
-                source_y: tr_y(source.y),
-                target_x: tr_x(target.x),
-                target_y: tr_y(target.y),
+                source_x: source.x,
+                source_y: source.y,
+                target_x: target.x,
+                target_y: target.y,
             });
         }
 
         for &site in self.mines_refs.iter() {
-            draw_element(DrawElement::Mine { x: tr_x(site.x), y: tr_y(site.y), });
+            draw_element(DrawElement::Mine { x: site.x, y: site.y, });
         }
+    }
+
+    fn translator(&self, viewport: &Option<Viewport>) -> Option<ViewportTranslator> {
+        let (w, h) = viewport
+            .map(|v| (v.draw_size[0], v.draw_size[1]))
+            .unwrap_or((SCREEN_WIDTH, SCREEN_HEIGHT));
+
+        if (w <= 2 * BORDER_WIDTH) || (h <= BORDER_WIDTH + CONSOLE_HEIGHT) {
+            None
+        } else {
+            Some(ViewportTranslator {
+                scale_x: (w - BORDER_WIDTH - BORDER_WIDTH) as f64 / (self.bounds.2 - self.bounds.0),
+                scale_y: (h - BORDER_WIDTH - CONSOLE_HEIGHT) as f64 / (self.bounds.3 - self.bounds.1),
+                min_x: self.bounds.0,
+                min_y: self.bounds.1,
+            })
+        }
+    }
+}
+
+struct ViewportTranslator {
+    scale_x: f64,
+    scale_y: f64,
+    min_x: f64,
+    min_y: f64,
+}
+
+impl ViewportTranslator {
+    fn x(&self, x: f64) -> f64 {
+        (x - self.min_x) * self.scale_x + BORDER_WIDTH as f64
+    }
+
+    fn y(&self, y: f64) -> f64 {
+        (y - self.min_y) * self.scale_y + CONSOLE_HEIGHT as f64
     }
 }
 
@@ -300,7 +344,9 @@ enum GuiState {
         gn_table: HashMap<lp::map::River, f64>,
         gn_bounds: (f64, f64),
     },
-    Futures,
+    Futures {
+        futures: Vec<(f64, f64, f64, f64)>,
+    },
     Shutdown,
 }
 
@@ -311,21 +357,21 @@ impl GuiState {
                 format!("Map [ {} ]. Press <G> to calculate Girvan-Newman or <F> to declare futures.", world.map_file),
             &GuiState::GirvanNewman { .. } =>
                 "Girvan-Newmap coeffs visualizer. Press <S> to return.".to_string(),
-            &GuiState::Futures =>
+            &GuiState::Futures { .. } =>
                 "Futures declaration visualizer. Press <S> to return.".to_string(),
             &GuiState::Shutdown =>
                 "Shutting down...".to_string(),
         }
     }
 
-    fn draw<'a, DF>(&self, world: &World<'a>, viewport: &Option<Viewport>, draw_element: DF)
+    fn draw<'a, DF>(&self, world: &World<'a>, mut draw_element: DF)
         where DF: FnMut(DrawElement)
     {
         match self {
             &GuiState::Standard =>
-                world.draw(viewport, draw_element),
+                world.draw(draw_element),
             &GuiState::GirvanNewman { ref gn_table, gn_bounds: (min_c, max_c), } =>
-                world.draw_custom(viewport, draw_element, |source_id, target_id| {
+                world.draw_custom(draw_element, |source_id, target_id| {
                     let river = lp::map::River::new(source_id, target_id);
                     if let Some(coeff) = gn_table.get(&river) {
                         let factor = (coeff - min_c) / (max_c - min_c);
@@ -337,8 +383,22 @@ impl GuiState {
                         ([1.0, 0.0, 0.0, 1.0], 2.0)
                     }
                 }),
-            &GuiState::Futures =>
-                world.draw(viewport, draw_element),
+            &GuiState::Futures { ref futures, } => {
+                world.draw(&mut draw_element);
+                let colors = &[[1.0, 1.0, 1.0, 1.0],
+                               [1.0, 1.0, 0.0, 1.0],
+                               [1.0, 0.0, 1.0, 1.0],
+                               [0.0, 1.0, 1.0, 1.0]];
+                for (i, &(source_x, source_y, target_x, target_y)) in futures.iter().enumerate() {
+                    draw_element(DrawElement::Future {
+                        color: colors[i % colors.len()],
+                        source_x: source_x,
+                        source_y: source_y,
+                        target_x: target_x,
+                        target_y: target_y,
+                    });
+                }
+            },
             &GuiState::Shutdown =>
                 (),
         }
@@ -358,6 +418,59 @@ impl GuiState {
                     }
                 }
                 GuiState::GirvanNewman { gn_table: gn_table, gn_bounds: bounds.unwrap_or((1.0, 1.0)), }
+            },
+            (GuiState::Standard, Key::F) => {
+                let mut gcache = Default::default();
+                let mut mcache = Default::default();
+                let gn_table = lp::map::RiversIndex::from_hash_map(
+                    world.graph.rivers_betweenness(&mut gcache));
+                let mines: Vec<_> = world.mines_refs.iter().map(|m| m.id).collect();
+                let rivers_count = world.rivers_refs.len();
+                let mut futures = Vec::new();
+                let mut start_turn = 0;
+                for &mine in mines.iter() {
+                    let maybe_future = lp::prob::estimate_best_future(
+                        &world.graph,
+                        mine,
+                        &mines,
+                        &gn_table,
+                        world.punter_id,
+                        world.punters_count,
+                        start_turn,
+                        |path_rivers, claimed_rivers| {
+                            path_rivers
+                                .iter()
+                                .filter(|&r| !claimed_rivers.contains_key(r))
+                                .max_by_key(|&r| gn_table.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
+                        },
+                        std::cmp::min(std::cmp::max(rivers_count, 128), 1024),
+                        std::time::Duration::from_millis(10000),
+                        &mut mcache,
+                        &mut gcache);
+                    if let Some((source, target, path_len)) = maybe_future {
+                        let find_ref = |site_id| {
+                            for &RiverRef { source, target } in world.rivers_refs.iter() {
+                                if source.id == site_id {
+                                    return Some(source);
+                                }
+                                if target.id == site_id {
+                                    return Some(target);
+                                }
+                            }
+                            None
+                        };
+                        if let (Some(source_ref), Some(target_ref)) = (find_ref(source), find_ref(target)) {
+                            futures.push((source_ref.x, source_ref.y, target_ref.x, target_ref.y));
+                            start_turn += path_len * world.punters_count;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                GuiState::Futures { futures: futures, }
             },
             (GuiState::GirvanNewman { .. }, Key::S) =>
                 GuiState::Standard,
