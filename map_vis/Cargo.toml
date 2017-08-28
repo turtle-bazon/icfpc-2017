@@ -1,0 +1,10 @@
+[package]
+name = "map_vis"
+version = "0.1.0"
+authors = ["Alexey Voznyuk <me@swizard.info>"]
+
+[dependencies]
+log = "0.3"
+clap = "2.24"
+env_logger = "0.4"
+piston_window = "0.61"
