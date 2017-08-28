@@ -21,7 +21,7 @@ use piston_window::{
     Button,
     Key
 };
-use lp::types::{SiteId};
+use lp::types::{SiteId, PunterId};
 
 const CONSOLE_HEIGHT: u32 = 32;
 const BORDER_WIDTH: u32 = 16;
@@ -43,6 +43,8 @@ fn main() {
 #[derive(Debug)]
 enum Error {
     MissingParameter(&'static str),
+    InvalidPuntersCount(clap::Error),
+    InvalidPunterId(clap::Error),
     Piston(PistonError),
     MapFileOpen { file: String, error: io::Error, },
     MapFileDecode { file: String, error: serde_json::Error, },
@@ -76,12 +78,30 @@ fn run() -> Result<(), Error> {
              .help("Graphics resources directory")
              .default_value("./assets")
              .takes_value(true))
+        .arg(Arg::with_name("punters-count")
+             .display_order(3)
+             .short("c")
+             .long("punters-count")
+             .value_name("COUNT")
+             .help("Total number of players on the map")
+             .default_value("2")
+             .takes_value(true))
+        .arg(Arg::with_name("punter-id")
+             .display_order(4)
+             .short("i")
+             .long("punter-id")
+             .value_name("ID")
+             .help("My punter id")
+             .default_value("0")
+             .takes_value(true))
         .get_matches();
 
     let map_file = matches.value_of("map-file")
         .ok_or(Error::MissingParameter("map-file"))?;
     let assets_dir = matches.value_of("assets-dir")
         .ok_or(Error::MissingParameter("assets-dir"))?;
+    let punters_count = value_t!(matches, "punters-count", usize).map_err(Error::InvalidPuntersCount)?;
+    let punter_id = value_t!(matches, "punter-id", PunterId).map_err(Error::InvalidPunterId)?;
 
     let opengl = OpenGL::V3_2;
     let mut window: PistonWindow = WindowSettings::new("lambda punter", [SCREEN_WIDTH, SCREEN_HEIGHT])
@@ -100,25 +120,22 @@ fn run() -> Result<(), Error> {
         }))?;
 
     let map = Map::new(map_file)?;
-    let world = World::new(&map)?;
+    let world = World::new(&map, punter_id, punters_count, map_file.to_string())?;
 
-    let mut gui_state = GuiState::Standard {
-        file: map_file.to_string(),
-        world: world,
-    };
+    let mut gui_state = GuiState::Standard;
     while let Some(event) = window.next() {
         window.draw_2d(&event, |context, g2d| {
             use piston_window::{clear, text, Transformed, line, ellipse};
             clear([0.0, 0.0, 0.0, 1.0], g2d);
             text::Text::new_color([0.0, 1.0, 0.0, 1.0], 16).draw(
-                &gui_state.console(),
+                &gui_state.console(&world),
                 &mut glyphs,
                 &context.draw_state,
                 context.transform.trans(5.0, 20.0),
                 g2d
             );
 
-            gui_state.draw(&context.viewport, |element| match element {
+            gui_state.draw(&world, &context.viewport, |element| match element {
                 DrawElement::River { color, radius, source_x, source_y, target_x, target_y } => {
                     line(color, radius, [source_x, source_y, target_x, target_y], context.transform, g2d);
                 },
@@ -129,7 +146,7 @@ fn run() -> Result<(), Error> {
         });
 
         if let Some(Button::Keyboard(key)) = event.press_args() {
-            gui_state = gui_state.process_key(key)?;
+            gui_state = gui_state.process_key(&world, key)?;
         }
         if let GuiState::Shutdown = gui_state {
             break;
@@ -180,6 +197,9 @@ struct RiverRef<'a> {
 }
 
 struct World<'a> {
+    map_file: String,
+    punter_id: PunterId,
+    punters_count: usize,
     rivers_refs: Vec<RiverRef<'a>>,
     mines_refs: Vec<&'a Site>,
     bounds: (f64, f64, f64, f64),
@@ -199,7 +219,7 @@ enum DrawElement {
 }
 
 impl<'a> World<'a> {
-    fn new(map: &'a Map) -> Result<World<'a>, Error> {
+    fn new(map: &'a Map, punter_id: PunterId, punters_count: usize, map_file: String) -> Result<World<'a>, Error> {
         let mut rivers_refs = Vec::with_capacity(map.rivers.len());
         for &River { source, target, } in map.rivers.iter() {
             rivers_refs.push(RiverRef {
@@ -227,6 +247,9 @@ impl<'a> World<'a> {
         }
 
         Ok(World {
+            map_file: map_file,
+            punter_id: punter_id,
+            punters_count: punters_count,
             rivers_refs: rivers_refs,
             mines_refs: mines_refs,
             bounds: bounds.ok_or(Error::WorldNoSitesAtAll)?,
@@ -271,39 +294,37 @@ impl<'a> World<'a> {
     }
 }
 
-enum GuiState<'a> {
-    Standard {
-        file: String,
-        world: World<'a>,
-    },
+enum GuiState {
+    Standard,
     GirvanNewman {
-        file: String,
-        world: World<'a>,
         gn_table: HashMap<lp::map::River, f64>,
         gn_bounds: (f64, f64),
     },
+    Futures,
     Shutdown,
 }
 
-impl<'a> GuiState<'a> {
-    fn console(&self) -> String {
+impl GuiState {
+    fn console<'a>(&self, world: &World<'a>) -> String {
         match self {
-            &GuiState::Standard { ref file, .. } =>
-                format!("Map [ {} ]. Press <G> to calculate Girvan-Newman.", file),
+            &GuiState::Standard =>
+                format!("Map [ {} ]. Press <G> to calculate Girvan-Newman or <F> to declare futures.", world.map_file),
             &GuiState::GirvanNewman { .. } =>
                 "Girvan-Newmap coeffs visualizer. Press <S> to return.".to_string(),
+            &GuiState::Futures =>
+                "Futures declaration visualizer. Press <S> to return.".to_string(),
             &GuiState::Shutdown =>
                 "Shutting down...".to_string(),
         }
     }
 
-    fn draw<DF>(&self, viewport: &Option<Viewport>, draw_element: DF)
+    fn draw<'a, DF>(&self, world: &World<'a>, viewport: &Option<Viewport>, draw_element: DF)
         where DF: FnMut(DrawElement)
     {
         match self {
-            &GuiState::Standard { ref world, .. } =>
+            &GuiState::Standard =>
                 world.draw(viewport, draw_element),
-            &GuiState::GirvanNewman { ref world, ref gn_table, gn_bounds: (min_c, max_c), .. } =>
+            &GuiState::GirvanNewman { ref gn_table, gn_bounds: (min_c, max_c), } =>
                 world.draw_custom(viewport, draw_element, |source_id, target_id| {
                     let river = lp::map::River::new(source_id, target_id);
                     if let Some(coeff) = gn_table.get(&river) {
@@ -316,14 +337,16 @@ impl<'a> GuiState<'a> {
                         ([1.0, 0.0, 0.0, 1.0], 2.0)
                     }
                 }),
+            &GuiState::Futures =>
+                world.draw(viewport, draw_element),
             &GuiState::Shutdown =>
                 (),
         }
     }
 
-    fn process_key(self, key: Key) -> Result<GuiState<'a>, Error> {
+    fn process_key<'a>(self, world: &World<'a>, key: Key) -> Result<GuiState, Error> {
         Ok(match (self, key) {
-            (GuiState::Standard { file, world, }, Key::G) => {
+            (GuiState::Standard, Key::G) => {
                 let gn_table = world.graph.rivers_betweenness::<()>(&mut Default::default());
                 let mut bounds = None;
                 for &coeff in gn_table.values() {
@@ -334,11 +357,12 @@ impl<'a> GuiState<'a> {
                         bounds = Some((coeff, coeff));
                     }
                 }
-                GuiState::GirvanNewman { file: file, world: world, gn_table: gn_table, gn_bounds: bounds.unwrap_or((1.0, 1.0)), }
+                GuiState::GirvanNewman { gn_table: gn_table, gn_bounds: bounds.unwrap_or((1.0, 1.0)), }
             },
-            (GuiState::GirvanNewman { file, world, .. }, Key::S) => {
-                GuiState::Standard { file: file, world: world, }
-            },
+            (GuiState::GirvanNewman { .. }, Key::S) =>
+                GuiState::Standard,
+            (GuiState::Futures { .. }, Key::S) =>
+                GuiState::Standard,
             (_, Key::Q) =>
                 GuiState::Shutdown,
             (other, _) =>
