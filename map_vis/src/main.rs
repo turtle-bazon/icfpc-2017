@@ -7,7 +7,8 @@ extern crate lambda_punter as lp;
 #[macro_use] extern crate clap;
 #[macro_use] extern crate serde_derive;
 
-use std::{io, fs, process};
+use std::{io, fs, thread, process};
+use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use clap::Arg;
@@ -45,6 +46,7 @@ enum Error {
     MissingParameter(&'static str),
     InvalidPuntersCount(clap::Error),
     InvalidPunterId(clap::Error),
+    InvalidTimeLimit(clap::Error),
     Piston(PistonError),
     MapFileOpen { file: String, error: io::Error, },
     MapFileDecode { file: String, error: serde_json::Error, },
@@ -52,6 +54,12 @@ enum Error {
     WorldNoTargetSiteId(SiteId),
     WorldNoMineSiteId(SiteId),
     WorldNoSitesAtAll,
+    GNThreadSpawn(io::Error),
+    GNThreadJoin(Box<std::any::Any + Send + 'static>),
+    GNThreadDisconnected,
+    FuturesThreadSpawn(io::Error),
+    FuturesThreadJoin(Box<std::any::Any + Send + 'static>),
+    FuturesThreadDisconnected,
 }
 
 #[derive(Debug)]
@@ -94,6 +102,14 @@ fn run() -> Result<(), Error> {
              .help("My punter id")
              .default_value("0")
              .takes_value(true))
+        .arg(Arg::with_name("time-limit")
+             .display_order(5)
+             .short("l")
+             .long("time-limit")
+             .value_name("MS")
+             .help("Monte-carlo time limit in ms")
+             .default_value("8000")
+             .takes_value(true))
         .get_matches();
 
     let map_file = matches.value_of("map-file")
@@ -102,6 +118,7 @@ fn run() -> Result<(), Error> {
         .ok_or(Error::MissingParameter("assets-dir"))?;
     let punters_count = value_t!(matches, "punters-count", usize).map_err(Error::InvalidPuntersCount)?;
     let punter_id = value_t!(matches, "punter-id", PunterId).map_err(Error::InvalidPunterId)?;
+    let time_limit_ms = value_t!(matches, "time-limit", u64).map_err(Error::InvalidTimeLimit)?;
 
     let opengl = OpenGL::V3_2;
     let mut window: PistonWindow = WindowSettings::new("lambda punter", [SCREEN_WIDTH, SCREEN_HEIGHT])
@@ -120,7 +137,7 @@ fn run() -> Result<(), Error> {
         }))?;
 
     let map = Map::new(map_file)?;
-    let world = World::new(&map, punter_id, punters_count, map_file.to_string())?;
+    let world = World::new(&map, punter_id, punters_count, time_limit_ms, map_file.to_string())?;
 
     let mut gui_state = GuiState::Standard;
     while let Some(event) = window.next() {
@@ -143,14 +160,19 @@ fn run() -> Result<(), Error> {
                     DrawElement::Mine { x, y } => {
                         ellipse([1.0, 0.0, 0.0, 1.0], [tr.x(x) - 8.0, tr.y(y) - 8.0, 16.0, 16.0], context.transform, g2d);
                     },
-                    DrawElement::Future { color, source_x, source_y, target_x, target_y, } => {
-                        line(color, 2.0, [tr.x(source_x) - 4.0, tr.y(source_y), tr.x(source_x) + 4.0, tr.y(source_y)], context.transform, g2d);
-                        line(color, 2.0, [tr.x(source_x), tr.y(source_y) - 4.0, tr.x(source_x), tr.y(source_y) + 4.0], context.transform, g2d);
+                    DrawElement::Future { index, color, source_x, source_y, target_x, target_y, } => {
+                        text::Text::new_color(color, 24).draw(
+                            &format!("{}", index),
+                            &mut glyphs,
+                            &context.draw_state,
+                            context.transform.trans(tr.x(source_x) - 12.0, tr.y(source_y) - 12.0),
+                            g2d
+                        );
                         line(color, 2.0, [tr.x(target_x) - 4.0, tr.y(target_y), tr.x(target_x) + 4.0, tr.y(target_y)], context.transform, g2d);
                         line(color, 2.0, [tr.x(target_x), tr.y(target_y) - 4.0, tr.x(target_x), tr.y(target_y) + 4.0], context.transform, g2d);
                         Line::new(color, 0.5).draw_arrow(
                             [tr.x(source_x), tr.y(source_y), tr.x(target_x), tr.y(target_y)],
-                            8.0, &Default::default(), context.transform, g2d);
+                            8.0, &context.draw_state, context.transform, g2d);
                     },
                 });
             }
@@ -162,6 +184,8 @@ fn run() -> Result<(), Error> {
         if let GuiState::Shutdown = gui_state {
             break;
         }
+
+        gui_state = gui_state.tick(&world)?;
     }
 
     Ok(())
@@ -211,10 +235,11 @@ struct World<'a> {
     map_file: String,
     punter_id: PunterId,
     punters_count: usize,
+    time_limit_ms: u64,
     rivers_refs: Vec<RiverRef<'a>>,
     mines_refs: Vec<&'a Site>,
     bounds: (f64, f64, f64, f64),
-    graph: lp::graph::Graph,
+    graph: Arc<lp::graph::Graph>,
 }
 
 enum DrawElement {
@@ -231,6 +256,7 @@ enum DrawElement {
         y: f64,
     },
     Future {
+        index: usize,
         color: [f32; 4],
         source_x: f64,
         source_y: f64,
@@ -240,7 +266,7 @@ enum DrawElement {
 }
 
 impl<'a> World<'a> {
-    fn new(map: &'a Map, punter_id: PunterId, punters_count: usize, map_file: String) -> Result<World<'a>, Error> {
+    fn new(map: &'a Map, punter_id: PunterId, punters_count: usize, time_limit_ms: u64, map_file: String) -> Result<World<'a>, Error> {
         let mut rivers_refs = Vec::with_capacity(map.rivers.len());
         for &River { source, target, } in map.rivers.iter() {
             rivers_refs.push(RiverRef {
@@ -271,10 +297,11 @@ impl<'a> World<'a> {
             map_file: map_file,
             punter_id: punter_id,
             punters_count: punters_count,
+            time_limit_ms: time_limit_ms,
             rivers_refs: rivers_refs,
             mines_refs: mines_refs,
             bounds: bounds.ok_or(Error::WorldNoSitesAtAll)?,
-            graph: lp::graph::Graph::from_iter(map.rivers.iter().map(|r| (r.source, r.target))),
+            graph: Arc::new(lp::graph::Graph::from_iter(map.rivers.iter().map(|r| (r.source, r.target)))),
         })
     }
 
@@ -340,9 +367,17 @@ impl ViewportTranslator {
 
 enum GuiState {
     Standard,
+    GirvanNewmanInProgress {
+        slave: thread::JoinHandle<()>,
+        rx: mpsc::Receiver<(HashMap<lp::map::River, f64>, Option<(f64, f64)>)>,
+    },
     GirvanNewman {
         gn_table: HashMap<lp::map::River, f64>,
         gn_bounds: (f64, f64),
+    },
+    FuturesInProgress {
+        slave: thread::JoinHandle<()>,
+        rx: mpsc::Receiver<Vec<(SiteId, SiteId)>>,
     },
     Futures {
         futures: Vec<(f64, f64, f64, f64)>,
@@ -355,10 +390,14 @@ impl GuiState {
         match self {
             &GuiState::Standard =>
                 format!("Map [ {} ]. Press <G> to calculate Girvan-Newman or <F> to declare futures.", world.map_file),
+            &GuiState::GirvanNewmanInProgress { .. } =>
+                "Calculating Girvan-Newman coeffs, please wait...".to_string(),
             &GuiState::GirvanNewman { .. } =>
                 "Girvan-Newmap coeffs visualizer. Press <S> to return.".to_string(),
-            &GuiState::Futures { .. } =>
-                "Futures declaration visualizer. Press <S> to return.".to_string(),
+            &GuiState::FuturesInProgress { .. } =>
+                "Estimating best futures, please wait...".to_string(),
+            &GuiState::Futures { ref futures, } =>
+                format!("Declared {} futures. Press <S> to return.", futures.len()),
             &GuiState::Shutdown =>
                 "Shutting down...".to_string(),
         }
@@ -368,7 +407,7 @@ impl GuiState {
         where DF: FnMut(DrawElement)
     {
         match self {
-            &GuiState::Standard =>
+            &GuiState::Standard | &GuiState::GirvanNewmanInProgress { .. } | &GuiState::FuturesInProgress { .. } =>
                 world.draw(draw_element),
             &GuiState::GirvanNewman { ref gn_table, gn_bounds: (min_c, max_c), } =>
                 world.draw_custom(draw_element, |source_id, target_id| {
@@ -391,6 +430,7 @@ impl GuiState {
                                [0.0, 1.0, 1.0, 1.0]];
                 for (i, &(source_x, source_y, target_x, target_y)) in futures.iter().enumerate() {
                     draw_element(DrawElement::Future {
+                        index: i,
                         color: colors[i % colors.len()],
                         source_x: source_x,
                         source_y: source_y,
@@ -407,47 +447,107 @@ impl GuiState {
     fn process_key<'a>(self, world: &World<'a>, key: Key) -> Result<GuiState, Error> {
         Ok(match (self, key) {
             (GuiState::Standard, Key::G) => {
-                let gn_table = world.graph.rivers_betweenness::<()>(&mut Default::default());
-                let mut bounds = None;
-                for &coeff in gn_table.values() {
-                    if let Some((ref mut min_c, ref mut max_c)) = bounds {
-                        if coeff < *min_c { *min_c = coeff; }
-                        if coeff > *max_c { *max_c = coeff; }
-                    } else {
-                        bounds = Some((coeff, coeff));
-                    }
-                }
-                GuiState::GirvanNewman { gn_table: gn_table, gn_bounds: bounds.unwrap_or((1.0, 1.0)), }
+                let graph = world.graph.clone();
+                let (tx, rx) = mpsc::channel();
+                let slave = thread::Builder::new()
+                    .name("girvan-newman calculator slave".to_string())
+                    .spawn(move || {
+                        let gn_table = graph.rivers_betweenness::<()>(&mut Default::default());
+                        let mut bounds = None;
+                        for &coeff in gn_table.values() {
+                            if let Some((ref mut min_c, ref mut max_c)) = bounds {
+                                if coeff < *min_c { *min_c = coeff; }
+                                if coeff > *max_c { *max_c = coeff; }
+                            } else {
+                                bounds = Some((coeff, coeff));
+                            }
+                        }
+                        tx.send((gn_table, bounds)).ok();
+                    })
+                    .map_err(Error::GNThreadSpawn)?;
+                GuiState::GirvanNewmanInProgress { slave: slave, rx: rx, }
             },
             (GuiState::Standard, Key::F) => {
-                let mut gcache = Default::default();
-                let mut mcache = Default::default();
-                let gn_table = lp::map::RiversIndex::from_hash_map(
-                    world.graph.rivers_betweenness(&mut gcache));
+                let graph = world.graph.clone();
                 let mines: Vec<_> = world.mines_refs.iter().map(|m| m.id).collect();
                 let rivers_count = world.rivers_refs.len();
-                let mut futures = Vec::new();
-                let mut start_turn = 0;
-                for &mine in mines.iter() {
-                    let maybe_future = lp::prob::estimate_best_future(
-                        &world.graph,
-                        mine,
-                        &mines,
-                        &gn_table,
-                        world.punter_id,
-                        world.punters_count,
-                        start_turn,
-                        |path_rivers, claimed_rivers| {
-                            path_rivers
-                                .iter()
-                                .filter(|&r| !claimed_rivers.contains_key(r))
-                                .max_by_key(|&r| gn_table.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
-                        },
-                        std::cmp::min(std::cmp::max(rivers_count, 128), 1024),
-                        std::time::Duration::from_millis(10000),
-                        &mut mcache,
-                        &mut gcache);
-                    if let Some((source, target, path_len)) = maybe_future {
+                let punter_id = world.punter_id;
+                let punters_count = world.punters_count;
+                let max_timeout = std::time::Duration::from_millis(world.time_limit_ms);
+
+                let (tx, rx) = mpsc::channel();
+                let slave = thread::Builder::new()
+                    .name("futures estimator slave".to_string())
+                    .spawn(move || {
+                        let mut gcache = Default::default();
+                        let mut mcache = Default::default();
+                        let gn_table = lp::map::RiversIndex::from_hash_map(
+                            graph.rivers_betweenness(&mut gcache));
+                        let mut futures = Vec::new();
+                        let mut start_turn = 0;
+                        let timeout_start = std::time::Instant::now();
+                        for &mine in mines.iter() {
+                            if let Some(time_avail) = max_timeout.checked_sub(timeout_start.elapsed()) {
+                                let maybe_future = lp::prob::estimate_best_future(
+                                    &graph,
+                                    mine,
+                                    &mines,
+                                    &gn_table,
+                                    punter_id,
+                                    punters_count,
+                                    start_turn,
+                                    |path_rivers, claimed_rivers| {
+                                        path_rivers
+                                            .iter()
+                                            .filter(|&r| !claimed_rivers.contains_key(r))
+                                            .max_by_key(|&r| gn_table.get(r).map(|bw| (bw * 1000.0) as u64).unwrap_or(0))
+                                    },
+                                    std::cmp::min(std::cmp::max(rivers_count, 128), 1024),
+                                    time_avail,
+                                    &mut mcache,
+                                    &mut gcache);
+                                if let Some((source, target, path_len)) = maybe_future {
+                                    futures.push((source, target));
+                                    start_turn += path_len * punters_count;
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        tx.send(futures).ok();
+                    })
+                    .map_err(Error::FuturesThreadSpawn)?;
+                GuiState::FuturesInProgress { slave: slave, rx: rx, }
+            },
+            (GuiState::GirvanNewman { .. }, Key::S) =>
+                GuiState::Standard,
+            (GuiState::Futures { .. }, Key::S) =>
+                GuiState::Standard,
+            (_, Key::Q) =>
+                GuiState::Shutdown,
+            (other, _) =>
+                other,
+        })
+    }
+
+    fn tick<'a>(self, world: &World<'a>) -> Result<Self, Error> {
+        match self {
+            GuiState::GirvanNewmanInProgress { slave, rx, } =>
+                match rx.try_recv() {
+                    Ok((gn_table, bounds)) => {
+                        let () = slave.join().map_err(Error::GNThreadJoin)?;
+                        Ok(GuiState::GirvanNewman { gn_table: gn_table, gn_bounds: bounds.unwrap_or((1.0, 1.0)), })
+                    },
+                    Err(mpsc::TryRecvError::Empty) =>
+                        Ok(GuiState::GirvanNewmanInProgress { slave: slave, rx: rx, }),
+                    Err(mpsc::TryRecvError::Disconnected) =>
+                        Err(Error::GNThreadDisconnected),
+                },
+            GuiState::FuturesInProgress { slave, rx, } =>
+                match rx.try_recv() {
+                    Ok(raw_futures) => {
                         let find_ref = |site_id| {
                             for &RiverRef { source, target } in world.rivers_refs.iter() {
                                 if source.id == site_id {
@@ -459,27 +559,22 @@ impl GuiState {
                             }
                             None
                         };
-                        if let (Some(source_ref), Some(target_ref)) = (find_ref(source), find_ref(target)) {
-                            futures.push((source_ref.x, source_ref.y, target_ref.x, target_ref.y));
-                            start_turn += path_len * world.punters_count;
-                        } else {
-                            break;
+                        let mut futures = Vec::with_capacity(raw_futures.len());
+                        for (source, target) in raw_futures {
+                            if let (Some(source_ref), Some(target_ref)) = (find_ref(source), find_ref(target)) {
+                                futures.push((source_ref.x, source_ref.y, target_ref.x, target_ref.y));
+                            }
                         }
-                    } else {
-                        break;
-                    }
-                }
-
-                GuiState::Futures { futures: futures, }
-            },
-            (GuiState::GirvanNewman { .. }, Key::S) =>
-                GuiState::Standard,
-            (GuiState::Futures { .. }, Key::S) =>
-                GuiState::Standard,
-            (_, Key::Q) =>
-                GuiState::Shutdown,
-            (other, _) =>
-                other,
-        })
+                        let () = slave.join().map_err(Error::FuturesThreadJoin)?;
+                        Ok(GuiState::Futures { futures: futures, })
+                    },
+                    Err(mpsc::TryRecvError::Empty) =>
+                        Ok(GuiState::FuturesInProgress { slave: slave, rx: rx, }),
+                    Err(mpsc::TryRecvError::Disconnected) =>
+                        Err(Error::FuturesThreadDisconnected),
+                },
+            other =>
+                Ok(other),
+        }
     }
 }
