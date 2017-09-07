@@ -1,4 +1,3 @@
-extern crate serde;
 extern crate serde_json;
 extern crate env_logger;
 extern crate piston_window;
@@ -16,6 +15,7 @@ use piston_window::{
     OpenGL,
     PistonWindow,
     WindowSettings,
+    TextureSettings,
     Viewport,
     Glyphs,
     PressEvent,
@@ -130,7 +130,7 @@ fn run() -> Result<(), Error> {
 
     let mut font_path = PathBuf::from(assets_dir);
     font_path.push("FiraSans-Regular.ttf");
-    let mut glyphs = Glyphs::new(&font_path, window.factory.clone())
+    let mut glyphs = Glyphs::new(&font_path, window.factory.clone(), TextureSettings::new())
         .map_err(|e| Error::Piston(PistonError::LoadFont {
             file: font_path.to_string_lossy().to_string(),
             error: e,
